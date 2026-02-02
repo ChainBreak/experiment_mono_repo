@@ -1,0 +1,18 @@
+[project]
+name = "multi_hypothesis_prediction"
+version = "0.1.0"
+description = "Multi-hypothesis prediction project"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.1.0",
+    "lightning",
+    "matplotlib",
+]
+
+[project.scripts]
+multi-hypothesis-prediction = "multi_hypothesis_prediction.main:cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
