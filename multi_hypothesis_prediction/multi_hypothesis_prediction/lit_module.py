@@ -3,9 +3,19 @@ import torch
 import torch.nn as nn
 
 class LitModule(LightningModule):
-    def __init__(self):
+    def __init__(self, hidden_dim: int = 32):
         super().__init__()
-        self.model = nn.Linear(1, 1)
+        self.model = nn.Sequential(
+            nn.Linear(1, hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, 1),
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
@@ -19,4 +29,4 @@ class LitModule(LightningModule):
         return loss
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
-        return torch.optim.SGD(self.parameters(), lr=0.01)
+        return torch.optim.SGD(self.parameters(), lr=0.1)

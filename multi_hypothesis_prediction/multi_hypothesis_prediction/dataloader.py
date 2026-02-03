@@ -16,5 +16,13 @@ class DataLoader():
 
     def _generate_batch(self) -> dict[str, torch.Tensor]:
         x = torch.rand(self.batch_size,1)
-        y = x**2
+
+        f1 = x
+        f2 = x**2
+
+        f = torch.cat([f1, f2], dim=1)
+
+        index = torch.randint(0, f.shape[1], (self.batch_size,1))
+        y = torch.gather(f, dim=1, index=index)
+
         return {"x": x, "y": y}
