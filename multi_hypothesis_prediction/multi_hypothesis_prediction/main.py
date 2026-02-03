@@ -32,13 +32,13 @@ def plot(model: LitModule) -> None:
     output_path = output_dir / (datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + ".png")
     with torch.no_grad():
 
-        batch_size = 10_000
+        batch_size = 10_00
         batch = next(iter(DataLoader(batch_size=batch_size)))
         x = batch["x"]
         y = batch["y"]
-        y_pred = model(x)
-        plt.scatter(x.numpy(), y.numpy(), label="True")
-        plt.scatter(x.numpy(), y_pred.numpy(), label="Predicted")
+        y_pred = model(x).sample()
+        plt.scatter(x.numpy(), y.numpy(), label="True", alpha=0.1)
+        plt.scatter(x.numpy(), y_pred.numpy(), label="Predicted", alpha=0.1)
         plt.legend()
         plt.savefig(output_path)
 

@@ -24,5 +24,5 @@ class DataLoader():
 
         index = torch.randint(0, f.shape[1], (self.batch_size,1))
         y = torch.gather(f, dim=1, index=index)
-
+        # y = y.repeat(1,5)
         return {"x": x, "y": y}
