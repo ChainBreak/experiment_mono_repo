@@ -8,7 +8,7 @@ class LitModule(LightningModule):
     def __init__(self, 
         hidden_dim: int = 32,
         output_dim: int = 1,
-        num_predictions: int = 6,
+        num_predictions: int = 32,
     ):
         super().__init__()
 
