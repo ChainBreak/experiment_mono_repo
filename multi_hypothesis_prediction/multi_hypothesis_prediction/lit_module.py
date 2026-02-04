@@ -8,7 +8,7 @@ class LitModule(LightningModule):
     def __init__(self, 
         hidden_dim: int = 32,
         output_dim: int = 1,
-        num_predictions: int = 64,
+        num_predictions: int = 32,
     ):
         super().__init__()
         self.model = nn.Sequential(
@@ -44,12 +44,16 @@ class LitModule(LightningModule):
         x, y = batch["x"], batch["y"]
 
         multi_hypothesis_prediction = self(x)
-        loss = multi_hypothesis_prediction.loss(y)
+
+
+        warm_up_ratio = min(1,(self.global_step / 10000))
+        loss = multi_hypothesis_prediction.loss(y, warm_up_ratio=warm_up_ratio)
         self.log("train_loss", loss, prog_bar=True)
+        self.log("warm", warm_up_ratio, prog_bar=True)
         return loss
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
-        return torch.optim.Adam(self.parameters(), lr=0.005)
+        return torch.optim.Adam(self.parameters(), lr=0.0001)
 
 @dataclasses.dataclass
 class MultiHypothesisPrediction():
@@ -61,15 +65,25 @@ class MultiHypothesisPrediction():
         prediction_index = torch.multinomial(probs, 1).unsqueeze(2)
         return self.predictions.gather(1, prediction_index)
 
-    def loss(self, y: torch.Tensor) -> torch.Tensor:
+    def loss(self, y: torch.Tensor, warm_up_ratio: float = 0.5) -> torch.Tensor:
         y = y.unsqueeze(1)
-
+        device = y.device
+        num_predictions = self.prob_logits.shape[-1]
         loss_per_prediction = (self.predictions - y).pow(2).mean(dim=2)
 
-        prediction_index = torch.argmin(loss_per_prediction, dim=1, keepdim=True)
+        min_index = torch.argmin(loss_per_prediction, dim=1, )
 
-        pred_loss = loss_per_prediction.gather(1, prediction_index).mean()
-        prob_loss = F.cross_entropy(self.prob_logits, prediction_index.squeeze(1), reduction="none").mean()
+        one_hot_weight = F.one_hot(
+            min_index, 
+            num_classes=num_predictions,
+        ).to(device).float()
+
+        avg_weight = torch.ones_like(one_hot_weight)
+   
+        weight = one_hot_weight * warm_up_ratio + avg_weight * (1 - warm_up_ratio)
+
+        pred_loss = (loss_per_prediction * weight).mean()
+        prob_loss = F.cross_entropy(self.prob_logits, min_index)
         return pred_loss + 0.01*prob_loss
 
 

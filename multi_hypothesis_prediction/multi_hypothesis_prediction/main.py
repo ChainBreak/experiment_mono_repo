@@ -8,6 +8,7 @@ import lightning as L
 from multi_hypothesis_prediction.dataloader import DataLoader
 import matplotlib.pyplot as plt
 import torch
+from lightning.pytorch.loggers import TensorBoardLogger
 
 @click.group()
 @click.version_option()
@@ -20,7 +21,10 @@ def cli() -> None:
 def train() -> None:
     """Train the model."""
     lit_module = LitModule()
-    trainer = L.Trainer(max_steps=30000)
+    trainer = L.Trainer(
+        max_steps=20000,
+        logger=TensorBoardLogger("lightning_logs"),
+        )
     trainer.fit(lit_module,
         train_dataloaders=DataLoader(batch_size=256),
     )
@@ -32,7 +36,7 @@ def plot(model: LitModule) -> None:
     output_path = output_dir / (datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + ".png")
     with torch.no_grad():
 
-        batch_size = 10_00
+        batch_size = 1000
         batch = next(iter(DataLoader(batch_size=batch_size)))
         x = batch["x"]
         y = batch["y"]
