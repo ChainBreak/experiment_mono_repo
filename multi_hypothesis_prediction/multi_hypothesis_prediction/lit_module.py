@@ -8,9 +8,13 @@ class LitModule(LightningModule):
     def __init__(self, 
         hidden_dim: int = 32,
         output_dim: int = 1,
-        num_predictions: int = 32,
+        num_predictions: int = 6,
     ):
         super().__init__()
+
+        self.save_hyperparameters()
+
+        self.warm_up_ratio = nn.Parameter(torch.tensor(1.0))
         self.model = nn.Sequential(
             nn.Linear(1, hidden_dim),
             nn.SiLU(),
@@ -46,14 +50,14 @@ class LitModule(LightningModule):
         multi_hypothesis_prediction = self(x)
 
 
-        warm_up_ratio = min(1,(self.global_step / 10000))
-        loss = multi_hypothesis_prediction.loss(y, warm_up_ratio=warm_up_ratio)
+        self.warm_up_ratio.data *= 0.995
+        loss = multi_hypothesis_prediction.loss(y, warm_up_ratio=self.warm_up_ratio.data)
         self.log("train_loss", loss, prog_bar=True)
-        self.log("warm", warm_up_ratio, prog_bar=True)
+        self.log("warm", self.warm_up_ratio.data, prog_bar=True)
         return loss
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
-        return torch.optim.Adam(self.parameters(), lr=0.0001)
+        return torch.optim.Adam(self.parameters(), lr=0.001)
 
 @dataclasses.dataclass
 class MultiHypothesisPrediction():
@@ -80,7 +84,7 @@ class MultiHypothesisPrediction():
 
         avg_weight = torch.ones_like(one_hot_weight)
    
-        weight = one_hot_weight * warm_up_ratio + avg_weight * (1 - warm_up_ratio)
+        weight = one_hot_weight * (1 - warm_up_ratio) + avg_weight * warm_up_ratio
 
         pred_loss = (loss_per_prediction * weight).mean()
         prob_loss = F.cross_entropy(self.prob_logits, min_index)

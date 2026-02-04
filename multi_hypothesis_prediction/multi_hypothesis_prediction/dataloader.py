@@ -20,7 +20,11 @@ class DataLoader():
         f1 = x
         f2 = x**2
 
-        f = torch.cat([f1, f2], dim=1)
+        m3 = torch.clamp(x*2-1, 0, 1)
+        f3 = torch.cos(m3)*3
+        f3 = m3*f3 + (1-m3)*f2
+
+        f = torch.cat([f1, f2, f3], dim=1)
 
         index = torch.randint(0, f.shape[1], (self.batch_size,1))
         y = torch.gather(f, dim=1, index=index)
