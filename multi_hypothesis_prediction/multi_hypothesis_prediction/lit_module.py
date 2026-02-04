@@ -8,7 +8,7 @@ class LitModule(LightningModule):
     def __init__(self, 
         hidden_dim: int = 32,
         output_dim: int = 1,
-        num_predictions: int = 3,
+        num_predictions: int = 64,
     ):
         super().__init__()
         self.model = nn.Sequential(
@@ -31,7 +31,6 @@ class LitModule(LightningModule):
             nn.Linear(hidden_dim, hidden_dim),
             nn.SiLU(),
             nn.Linear(hidden_dim, num_predictions),
-            nn.Softmax(dim=1),
         )
 
     def forward(self, x: torch.Tensor) -> "MultiHypothesisPrediction":
@@ -50,7 +49,7 @@ class LitModule(LightningModule):
         return loss
 
     def configure_optimizers(self) -> torch.optim.Optimizer:
-        return torch.optim.Adam(self.parameters(), lr=0.01)
+        return torch.optim.Adam(self.parameters(), lr=0.005)
 
 @dataclasses.dataclass
 class MultiHypothesisPrediction():
@@ -69,8 +68,9 @@ class MultiHypothesisPrediction():
 
         prediction_index = torch.argmin(loss_per_prediction, dim=1, keepdim=True)
 
-        loss = loss_per_prediction.gather(1, prediction_index)
-        return loss.mean()
+        pred_loss = loss_per_prediction.gather(1, prediction_index).mean()
+        prob_loss = F.cross_entropy(self.prob_logits, prediction_index.squeeze(1), reduction="none").mean()
+        return pred_loss + 0.01*prob_loss
 
 
 class Reshape(nn.Module):

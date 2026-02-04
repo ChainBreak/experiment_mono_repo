@@ -20,7 +20,7 @@ def cli() -> None:
 def train() -> None:
     """Train the model."""
     lit_module = LitModule()
-    trainer = L.Trainer(max_steps=1000)
+    trainer = L.Trainer(max_steps=30000)
     trainer.fit(lit_module,
         train_dataloaders=DataLoader(batch_size=256),
     )
