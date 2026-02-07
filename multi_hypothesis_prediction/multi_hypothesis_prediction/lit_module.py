@@ -27,12 +27,12 @@ class LitModule(LightningModule):
         )
 
         self.pred_head = nn.Sequential(
-            nn.Linear(1, hidden_dim),
-            nn.SiLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.SiLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.SiLU(),
+            # nn.Linear(1, hidden_dim),
+            # nn.SiLU(),
+            # nn.Linear(hidden_dim, hidden_dim),
+            # nn.SiLU(),
+            # nn.Linear(hidden_dim, hidden_dim),
+            # nn.SiLU(),
             nn.Linear(hidden_dim, hidden_dim),
             nn.SiLU(),
             nn.Linear(hidden_dim, num_predictions*output_dim),
@@ -40,19 +40,19 @@ class LitModule(LightningModule):
         )
 
         self.prob_head = nn.Sequential(
-            nn.Linear(1, hidden_dim),
-            nn.SiLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.SiLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.SiLU(),
+            # nn.Linear(1, hidden_dim),
+            # nn.SiLU(),
+            # nn.Linear(hidden_dim, hidden_dim),
+            # nn.SiLU(),
+            # nn.Linear(hidden_dim, hidden_dim),
+            # nn.SiLU(),
             nn.Linear(hidden_dim, hidden_dim),
             nn.SiLU(),
             nn.Linear(hidden_dim, num_predictions),
         )
 
     def forward(self, x: torch.Tensor) -> "MultiHypothesisPrediction":
-        # x = self.model(x)
+        x = self.model(x)
         return MultiHypothesisPrediction(
             predictions=self.pred_head(x),
             prob_logits=self.prob_head(x),
