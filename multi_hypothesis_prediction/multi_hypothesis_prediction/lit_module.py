@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import dataclasses
+import numpy as np
 
 class LitModule(LightningModule):
     def __init__(self, 
@@ -14,7 +15,8 @@ class LitModule(LightningModule):
 
         self.save_hyperparameters()
 
-        self.warm_up_ratio = nn.Parameter(torch.tensor(1.0))
+        self.temperature = nn.Parameter(torch.tensor(1.0))
+
         self.model = nn.Sequential(
             nn.Linear(1, hidden_dim),
             nn.SiLU(),
@@ -25,6 +27,12 @@ class LitModule(LightningModule):
         )
 
         self.pred_head = nn.Sequential(
+            nn.Linear(1, hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.SiLU(),
             nn.Linear(hidden_dim, hidden_dim),
             nn.SiLU(),
             nn.Linear(hidden_dim, num_predictions*output_dim),
@@ -32,13 +40,19 @@ class LitModule(LightningModule):
         )
 
         self.prob_head = nn.Sequential(
+            nn.Linear(1, hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.SiLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.SiLU(),
             nn.Linear(hidden_dim, hidden_dim),
             nn.SiLU(),
             nn.Linear(hidden_dim, num_predictions),
         )
 
     def forward(self, x: torch.Tensor) -> "MultiHypothesisPrediction":
-        x = self.model(x)
+        # x = self.model(x)
         return MultiHypothesisPrediction(
             predictions=self.pred_head(x),
             prob_logits=self.prob_head(x),
@@ -50,14 +64,27 @@ class LitModule(LightningModule):
         multi_hypothesis_prediction = self(x)
 
 
-        self.warm_up_ratio.data *= 0.995
-        loss = multi_hypothesis_prediction.loss(y, warm_up_ratio=self.warm_up_ratio.data)
+        self.temperature.data *= 0.995
+        loss = multi_hypothesis_prediction.loss(y, temperature=self.temperature.data, lit_module=self)
         self.log("train_loss", loss, prog_bar=True)
-        self.log("warm", self.warm_up_ratio.data, prog_bar=True)
+        self.log("temperature", self.temperature.data, prog_bar=True)
         return loss
 
-    def configure_optimizers(self) -> torch.optim.Optimizer:
-        return torch.optim.Adam(self.parameters(), lr=0.001)
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.01)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, 
+            T_max=30000,
+            eta_min=0,
+        )
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "interval": "step",
+                "frequency": 1,
+            },
+        }
 
 @dataclasses.dataclass
 class MultiHypothesisPrediction():
@@ -69,26 +96,36 @@ class MultiHypothesisPrediction():
         prediction_index = torch.multinomial(probs, 1).unsqueeze(2)
         return self.predictions.gather(1, prediction_index)
 
-    def loss(self, y: torch.Tensor, warm_up_ratio: float = 0.5) -> torch.Tensor:
+    def loss(self, y: torch.Tensor, temperature: float = 1000, lit_module: LitModule | None = None) -> torch.Tensor:
         y = y.unsqueeze(1)
-        device = y.device
-        num_predictions = self.prob_logits.shape[-1]
+
         loss_per_prediction = (self.predictions - y).pow(2).mean(dim=2)
+        temperature = max(temperature, 1e-10)
+        soft_min =torch.softmax(-loss_per_prediction/temperature, dim=1).detach()
 
-        min_index = torch.argmin(loss_per_prediction, dim=1, )
+        # probs = torch.softmax(self.prob_logits, dim=1)
+        # weight = probs * soft_min
+        # weight = weight / weight.sum(dim=1, keepdim=True)
 
-        one_hot_weight = F.one_hot(
-            min_index, 
-            num_classes=num_predictions,
-        ).to(device).float()
-
-        avg_weight = torch.ones_like(one_hot_weight)
-   
-        weight = one_hot_weight * (1 - warm_up_ratio) + avg_weight * warm_up_ratio
-
+        # weight = weight.detach()
+        weight = soft_min
+       
         pred_loss = (loss_per_prediction * weight).mean()
+
+        # prob_loss = F.kl_div(
+        #     input=F.log_softmax(self.prob_logits, dim=1), 
+        #     target=soft_min.clamp(min=1e-10),
+        #     log_target=False,
+        #     reduction='batchmean')
+
+        min_index = torch.argmax(weight, dim=1)
         prob_loss = F.cross_entropy(self.prob_logits, min_index)
-        return pred_loss + 0.01*prob_loss
+
+        if lit_module is not None:
+            lit_module.log("prob_loss", prob_loss, prog_bar=False)
+            lit_module.log("pred_loss", pred_loss, prog_bar=False)
+
+        return pred_loss + prob_loss
 
 
 class Reshape(nn.Module):

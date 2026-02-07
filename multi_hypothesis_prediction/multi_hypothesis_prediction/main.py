@@ -22,7 +22,7 @@ def train() -> None:
     """Train the model."""
     lit_module = LitModule()
     trainer = L.Trainer(
-        max_steps=20000,
+        max_steps=30000,
         logger=TensorBoardLogger("lightning_logs"),
         )
     trainer.fit(lit_module,
