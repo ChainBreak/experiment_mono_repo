@@ -125,7 +125,7 @@ class MultiHypothesisPrediction():
             lit_module.log("prob_loss", prob_loss, prog_bar=False)
             lit_module.log("pred_loss", pred_loss, prog_bar=False)
 
-        return pred_loss + prob_loss
+        return pred_loss + 0.0001*prob_loss
 
 
 class Reshape(nn.Module):
