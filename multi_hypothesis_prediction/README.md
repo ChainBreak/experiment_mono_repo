@@ -19,11 +19,6 @@ After installation, you can use the CLI:
 # Show help
 uv run multi-hypothesis-prediction --help
 
-# Run example command
-uv run multi-hypothesis-prediction hello --name "User"
-
-# Run prediction
-uv run multi-hypothesis-prediction predict input.txt --output results.txt
 ```
 
 ## Development
@@ -35,3 +30,10 @@ uv sync
 # Run the CLI directly
 uv run python -m multi_hypothesis_prediction.main
 ```
+
+## Tricks that made it work.
+ - Using soft min between hypothesis and data.
+ - Decaying the soft min temperature.
+ - Cosine learning rate scheduler.
+ - Scaling the cross entropy loss down by 1000 to match the mse loss.
+

@@ -103,22 +103,10 @@ class MultiHypothesisPrediction():
         temperature = max(temperature, 1e-10)
         soft_min =torch.softmax(-loss_per_prediction/temperature, dim=1).detach()
 
-        # probs = torch.softmax(self.prob_logits, dim=1)
-        # weight = probs * soft_min
-        # weight = weight / weight.sum(dim=1, keepdim=True)
-
-        # weight = weight.detach()
-        weight = soft_min
        
-        pred_loss = (loss_per_prediction * weight).mean()
+        pred_loss = (loss_per_prediction * soft_min).mean()
 
-        # prob_loss = F.kl_div(
-        #     input=F.log_softmax(self.prob_logits, dim=1), 
-        #     target=soft_min.clamp(min=1e-10),
-        #     log_target=False,
-        #     reduction='batchmean')
-
-        min_index = torch.argmax(weight, dim=1)
+        min_index = torch.argmax(soft_min, dim=1)
         prob_loss = F.cross_entropy(self.prob_logits, min_index)
 
         if lit_module is not None:
