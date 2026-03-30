@@ -6,8 +6,10 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "click>=8.0",
+    "lightning>=2.0",
+    "pyyaml>=6.0",
+    "tensorboard>=2.14",
     "torch",
-    "pytorch-lightning",
 ]
 
 [project.scripts]
@@ -16,6 +18,11 @@ toy-deepfake = "toy_deepfake.main:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = [
+    "toy_deepfake/config.yaml",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["toy_deepfake"]

@@ -1,10 +1,66 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
 import click
+import lightning as L
+import yaml
+from lightning.pytorch import Trainer
+from lightning.pytorch.loggers import CSVLogger, TensorBoardLogger
+
+from toy_deepfake.lit_module import ToyAutoencoderLitModule
 
 
-@click.command()
-def main() -> None:
-    """Hello world CLI entry point."""
+@click.group()
+def cli() -> None:
+    """Toy deepfake CLI."""
+
+
+@cli.command("hello")
+def hello() -> None:
+    """Print a greeting."""
     click.echo("Hello, world!")
+
+
+@cli.command("train")
+@click.argument(
+    "config_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+)
+def train(config_path: Path) -> None:
+    """Train the toy autoencoder from a YAML config."""
+    with config_path.open(encoding="utf-8") as f:
+        config: dict[str, Any] = yaml.safe_load(f)
+
+    training = config["training"]
+    if training.get("seed") is not None:
+        L.seed_everything(int(training["seed"]), workers=True)
+
+    model = ToyAutoencoderLitModule(config)
+
+    loggers: list = []
+    log_dir = training["log_dir"]
+    name = training["logger_name"]
+    if training.get("use_tensorboard", True):
+        loggers.append(TensorBoardLogger(save_dir=log_dir, name=name))
+    if training.get("use_csv", False):
+        loggers.append(CSVLogger(save_dir=log_dir, name=name))
+    if not loggers:
+        loggers.append(CSVLogger(save_dir=log_dir, name=name))
+
+    trainer = Trainer(
+        max_epochs=training["max_epochs"],
+        logger=loggers,
+        default_root_dir=log_dir,
+        accelerator=training.get("accelerator", "auto"),
+        devices=training.get("devices", 1),
+    )
+    trainer.fit(model)
+
+
+def main() -> None:
+    cli()
 
 
 if __name__ == "__main__":
