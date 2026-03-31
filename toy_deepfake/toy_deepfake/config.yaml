@@ -1,0 +1,24 @@
+# Default training config (bundled with the package; copy or pass path to `toy-deepfake train`).
+
+dataset:
+  point_dim: 2
+  num_clusters: 3
+  num_samples: 10000
+
+model:
+  input_dim: 2
+  latent_dim: 4
+  hidden_dim: 32
+
+training:
+  batch_size: 64
+  num_workers: 0
+  max_epochs: 20
+  learning_rate: 0.001
+  log_dir: lightning_logs
+  logger_name: toy_ae
+  use_tensorboard: true
+  use_csv: true
+  accelerator: auto
+  devices: 1
+  seed: 42

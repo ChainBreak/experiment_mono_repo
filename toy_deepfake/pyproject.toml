@@ -23,6 +23,19 @@ build-backend = "hatchling.build"
 include = [
     "toy_deepfake/config.yaml",
 ]
+exclude = [
+    "**/*_test.py",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["toy_deepfake"]
+
+[dependency-groups]
+dev = [
+    "matplotlib>=3.8",
+    "pytest>=8",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["toy_deepfake"]
+python_files = ["*_test.py", "test_*.py"]
