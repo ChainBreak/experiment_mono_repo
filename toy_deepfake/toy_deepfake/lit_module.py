@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from collections import defaultdict
+
 import lightning as L
+import matplotlib.pyplot as plt
 import torch
+from lightning.pytorch.loggers import TensorBoardLogger
 from omegaconf import DictConfig
 from torch import nn
 from torch.utils.data import DataLoader
@@ -48,12 +52,51 @@ class ToyAutoencoderLitModule(L.LightningModule):
 
     def training_step(self, batch: dict[str, torch.Tensor], batch_idx: int) -> torch.Tensor:
         x = batch["point"]
-        identity = batch["identity"]
         z = self.encoder(x)
         y = self.decoder(z)
         loss = nn.functional.mse_loss(y, x)
         self.log("train_loss", loss, prog_bar=True)
         return loss
+
+    def on_validation_start(self) -> None:
+        self._val_points: defaultdict[str, list[torch.Tensor]] = defaultdict(list)
+
+    def validation_step(self, batch: dict[str, torch.Tensor], batch_idx: int) -> None:
+        x = batch["point"]
+        identity = batch["identity"]
+        z = self.encoder(x)
+        y = self.decoder(z)
+        self._val_points["x"].append(x.detach().cpu())
+        self._val_points["z"].append(z.detach().cpu())
+        self._val_points["y"].append(y.detach().cpu())
+        self._val_points["identity"].append(identity.detach().cpu())
+
+    def on_validation_epoch_end(self) -> None:
+
+        if not self._val_points["x"]:
+            return
+        x = torch.cat(self._val_points["x"], dim=0).numpy()
+        z = torch.cat(self._val_points["z"], dim=0).numpy()
+        y = torch.cat(self._val_points["y"], dim=0).numpy()
+        ident = torch.cat(self._val_points["identity"], dim=0).squeeze(-1).numpy()
+
+        for name, pts in [("val/x", x), ("val/z", z), ("val/y", y)]:
+            fig, ax = plt.subplots(figsize=(6, 6))
+            ax.scatter(pts[:, 0], pts[:, 1], c=ident, cmap="tab10", s=4, alpha=0.7)
+            ax.set_title(name)
+            ax.set_aspect("equal", adjustable="box")
+            self._log_figure(name, fig)
+
+    def _log_figure(self, name: str, fig: plt.Figure) -> None:
+        logger = self.logger
+        if logger is None:
+            plt.close(fig)
+            return
+        loggers = getattr(logger, "loggers", [logger])
+        for log in loggers:
+            if isinstance(log, TensorBoardLogger):
+                log.experiment.add_figure(name, fig, self.current_epoch)
+        plt.close(fig)
 
     def configure_optimizers(self):
         return torch.optim.Adam(
@@ -64,8 +107,8 @@ class ToyAutoencoderLitModule(L.LightningModule):
     def train_dataloader(self) -> DataLoader:
 
         dataset = EllipseClusterDataset(
-            length=self._config.dataset.num_samples,
-            point_dim=self._config.dataset.point_dim,
+            length=self._config.dataset_train.num_samples,
+            point_dim=self._config.dataset_train.point_dim,
         )
 
         return DataLoader(
@@ -73,4 +116,16 @@ class ToyAutoencoderLitModule(L.LightningModule):
             batch_size=self._config.training.batch_size,
             num_workers=self._config.training.num_workers,
             shuffle=True,
+        )
+
+    def val_dataloader(self) -> DataLoader:
+        dataset = EllipseClusterDataset(
+            length=self._config.dataset_val.num_samples,
+            point_dim=self._config.dataset_val.point_dim,
+        )
+        return DataLoader(
+            dataset=dataset,
+            batch_size=self._config.training.batch_size,
+            num_workers=self._config.training.num_workers,
+            shuffle=False,
         )

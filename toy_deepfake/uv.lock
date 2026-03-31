@@ -1721,6 +1721,7 @@ source = { editable = "." }
 dependencies = [
     { name = "click" },
     { name = "lightning" },
+    { name = "matplotlib" },
     { name = "omegaconf" },
     { name = "tensorboard" },
     { name = "torch" },
@@ -1728,7 +1729,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "matplotlib" },
     { name = "pytest" },
 ]
 
@@ -1736,16 +1736,14 @@ dev = [
 requires-dist = [
     { name = "click", specifier = ">=8.0" },
     { name = "lightning", specifier = ">=2.0" },
+    { name = "matplotlib", specifier = ">=3.8" },
     { name = "omegaconf", specifier = ">=2.3" },
     { name = "tensorboard", specifier = ">=2.14" },
     { name = "torch" },
 ]
 
 [package.metadata.requires-dev]
-dev = [
-    { name = "matplotlib", specifier = ">=3.8" },
-    { name = "pytest", specifier = ">=8" },
-]
+dev = [{ name = "pytest", specifier = ">=8" }]
 
 [[package]]
 name = "tqdm"

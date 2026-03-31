@@ -7,6 +7,7 @@ requires-python = ">=3.11"
 dependencies = [
     "click>=8.0",
     "lightning>=2.0",
+    "matplotlib>=3.8",
     "omegaconf>=2.3",
     "tensorboard>=2.14",
     "torch",
@@ -32,7 +33,6 @@ packages = ["toy_deepfake"]
 
 [dependency-groups]
 dev = [
-    "matplotlib>=3.8",
     "pytest>=8",
 ]
 
