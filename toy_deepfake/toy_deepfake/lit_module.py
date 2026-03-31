@@ -1,72 +1,76 @@
 from __future__ import annotations
 
-from typing import Any
-
 import lightning as L
 import torch
+from omegaconf import DictConfig
 from torch import nn
 from torch.utils.data import DataLoader
 
 from toy_deepfake.dataset.dataset import EllipseClusterDataset
 
-
 class ToyAutoencoderLitModule(L.LightningModule):
-    def __init__(self, config: dict[str, Any]) -> None:
+    def __init__(self, config: DictConfig) -> None:
         super().__init__()
         self._config = config
-        ds_cfg = config["dataset"]
-        self._dataset = EllipseClusterDataset(
-            length=ds_cfg["num_samples"],
-            point_dim=ds_cfg.get("point_dim", 2),
-        )
+
         self.encoder = self.create_encoder()
         self.intermediate = self.create_intermediate()
         self.decoder = self.create_decoder()
 
     def create_encoder(self) -> nn.Module:
-        m = self._config["model"]
-        inp, hid, lat = m["input_dim"], m["hidden_dim"], m["latent_dim"]
+    
         return nn.Sequential(
-            nn.Linear(inp, hid),
+            nn.Linear(
+                in_features=self._config.model.input_dim,
+                out_features=self._config.model.hidden_dim,
+            ),
             nn.SiLU(),
-            nn.Linear(hid, lat),
+            nn.Linear(
+                in_features=self._config.model.hidden_dim, 
+                out_features=self._config.model.latent_dim),
         )
 
     def create_intermediate(self) -> nn.Module:
         return nn.Identity()
 
     def create_decoder(self) -> nn.Module:
-        m = self._config["model"]
-        inp, hid, lat = m["input_dim"], m["hidden_dim"], m["latent_dim"]
         return nn.Sequential(
-            nn.Linear(lat, hid),
+            nn.Linear(
+                in_features=self._config.model.latent_dim,
+                out_features=self._config.model.hidden_dim,
+            ),
             nn.SiLU(),
-            nn.Linear(hid, inp),
+            nn.Linear(
+                in_features=self._config.model.hidden_dim, 
+                out_features=self._config.model.input_dim),
         )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        z = self.encoder(x)
-        z = self.intermediate(z)
-        return self.decoder(z)
 
     def training_step(self, batch: dict[str, torch.Tensor], batch_idx: int) -> torch.Tensor:
         x = batch["point"]
-        pred = self(x)
-        loss = nn.functional.mse_loss(pred, x)
+        identity = batch["identity"]
+        z = self.encoder(x)
+        y = self.decoder(z)
+        loss = nn.functional.mse_loss(y, x)
         self.log("train_loss", loss, prog_bar=True)
         return loss
 
     def configure_optimizers(self):
-        lr = self._config["training"]["learning_rate"]
-        return torch.optim.Adam(self.parameters(), lr=lr)
+        return torch.optim.Adam(
+            params=self.parameters(), 
+            lr=self._config.training.learning_rate,
+        )
 
     def train_dataloader(self) -> DataLoader:
-        t = self._config["training"]
-        nw = t.get("num_workers", 0)
+
+        dataset = EllipseClusterDataset(
+            length=self._config.dataset.num_samples,
+            point_dim=self._config.dataset.point_dim,
+        )
+
         return DataLoader(
-            self._dataset,
-            batch_size=t["batch_size"],
+            dataset=dataset,
+            batch_size=self._config.training.batch_size,
+            num_workers=self._config.training.num_workers,
             shuffle=True,
-            num_workers=nw,
-            persistent_workers=nw > 0,
         )
