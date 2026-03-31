@@ -10,6 +10,7 @@ from omegaconf import DictConfig
 from torch import nn
 from torch.utils.data import DataLoader
 
+from toy_deepfake.centering import Centering
 from toy_deepfake.dataset.dataset import EllipseClusterDataset
 
 class ToyAutoencoderLitModule(L.LightningModule):
@@ -18,7 +19,7 @@ class ToyAutoencoderLitModule(L.LightningModule):
         self._config = config
 
         self.encoder = self.create_encoder()
-        self.intermediate = self.create_intermediate()
+        self.centering = self.create_centering()
         self.decoder = self.create_decoder()
 
     def create_encoder(self) -> nn.Module:
@@ -34,8 +35,8 @@ class ToyAutoencoderLitModule(L.LightningModule):
                 out_features=self._config.model.latent_dim),
         )
 
-    def create_intermediate(self) -> nn.Module:
-        return nn.Identity()
+    def create_centering(self) -> nn.Module:
+        return Centering()
 
     def create_decoder(self) -> nn.Module:
         return nn.Sequential(
@@ -52,7 +53,9 @@ class ToyAutoencoderLitModule(L.LightningModule):
 
     def training_step(self, batch: dict[str, torch.Tensor], batch_idx: int) -> torch.Tensor:
         x = batch["point"]
+        identity = batch["identity"]
         z = self.encoder(x)
+        z = self.centering(z, identity)
         y = self.decoder(z)
         loss = nn.functional.mse_loss(y, x)
         self.log("train_loss", loss, prog_bar=True)
@@ -65,6 +68,7 @@ class ToyAutoencoderLitModule(L.LightningModule):
         x = batch["point"]
         identity = batch["identity"]
         z = self.encoder(x)
+        z = self.centering(z, identity)
         y = self.decoder(z)
         self._val_points["x"].append(x.detach().cpu())
         self._val_points["z"].append(z.detach().cpu())
