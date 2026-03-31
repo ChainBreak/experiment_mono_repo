@@ -7,7 +7,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader
 
-from toy_deepfake.dataset import EllipseClusterDataset
+from toy_deepfake.dataset.dataset import EllipseClusterDataset
 
 
 class ToyAutoencoderLitModule(L.LightningModule):
