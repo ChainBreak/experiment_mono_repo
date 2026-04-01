@@ -43,5 +43,4 @@ class EllipseClusterDataset(Dataset):
         i = torch.randint(0, 3, (), dtype=torch.long)
         z = torch.randn(self._point_dim, dtype=torch.float32)
         point = self._chol @ z + self._centers[i]
-        identity = i.unsqueeze(0)
-        return {"point": point, "identity": identity}
+        return {"point": point, "identity": i}

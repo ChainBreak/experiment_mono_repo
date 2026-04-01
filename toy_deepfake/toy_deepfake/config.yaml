@@ -3,7 +3,7 @@
 dataset_train:
   point_dim: 2
   num_clusters: 3
-  num_samples: 1000
+  num_samples: 100000
 
 dataset_val:
   point_dim: 2
@@ -14,11 +14,12 @@ model:
   input_dim: ${dataset_train.point_dim}
   latent_dim: 2
   hidden_dim: 32
+  num_identities: ${dataset_train.num_clusters}
 
 training:
   batch_size: 256
   num_workers: 0
-  max_epochs: 20
+  max_epochs: 2000
   learning_rate: 0.001
   log_dir: lightning_logs
   logger_name: toy_ae

@@ -19,7 +19,10 @@ class ToyAutoencoderLitModule(L.LightningModule):
         self._config = config
 
         self.encoder = self.create_encoder()
-        self.centering = self.create_centering()
+        self.centering = Centering(
+            num_identities=self._config.model.num_identities,
+            shape=(self._config.model.latent_dim,),
+        )
         self.decoder = self.create_decoder()
 
     def create_encoder(self) -> nn.Module:
@@ -34,9 +37,6 @@ class ToyAutoencoderLitModule(L.LightningModule):
                 in_features=self._config.model.hidden_dim, 
                 out_features=self._config.model.latent_dim),
         )
-
-    def create_centering(self) -> nn.Module:
-        return Centering()
 
     def create_decoder(self) -> nn.Module:
         return nn.Sequential(
@@ -55,11 +55,12 @@ class ToyAutoencoderLitModule(L.LightningModule):
         x = batch["point"]
         identity = batch["identity"]
         z = self.encoder(x)
-        z = self.centering(z, identity)
-        y = self.decoder(z)
+        z_offset, loss_center = self.centering(z, identity)
+        y = self.decoder(z_offset)
         loss = nn.functional.mse_loss(y, x)
         self.log("train_loss", loss, prog_bar=True)
-        return loss
+        self.log("train_loss_center", loss_center, prog_bar=True)
+        return loss + loss_center
 
     def on_validation_start(self) -> None:
         self._val_points: defaultdict[str, list[torch.Tensor]] = defaultdict(list)
@@ -68,21 +69,24 @@ class ToyAutoencoderLitModule(L.LightningModule):
         x = batch["point"]
         identity = batch["identity"]
         z = self.encoder(x)
-        z = self.centering(z, identity)
-        y = self.decoder(z)
+        z_offset, loss_center = self.centering(z, identity)
+        y = self.decoder(z_offset)
         self._val_points["x"].append(x.detach().cpu())
         self._val_points["z"].append(z.detach().cpu())
+        self._val_points["z_offset"].append(z_offset.detach().cpu())
         self._val_points["y"].append(y.detach().cpu())
         self._val_points["identity"].append(identity.detach().cpu())
 
     def on_validation_epoch_end(self) -> None:
 
         ident = torch.cat(self._val_points["identity"], dim=0).squeeze(-1).numpy()
+        centers = self.centering.identity_centers.detach().cpu().numpy()
 
-        for name in ["x", "z", "y"]:
+        for name in ["x", "z", "z_offset", "y"]:
             points = torch.cat(self._val_points[name], dim=0).numpy()
             fig, ax = plt.subplots(figsize=(6, 6))
             ax.scatter(points[:, 0], points[:, 1], c=ident, cmap="tab10", s=4, alpha=0.7)
+            # ax.scatter(centers[:, 0], centers[:, 1], color="black", s=4, marker="x")
             ax.set_title(name)
             ax.set_aspect("equal", adjustable="box")
             self._log_figure(name, fig)
