@@ -77,16 +77,12 @@ class ToyAutoencoderLitModule(L.LightningModule):
 
     def on_validation_epoch_end(self) -> None:
 
-        if not self._val_points["x"]:
-            return
-        x = torch.cat(self._val_points["x"], dim=0).numpy()
-        z = torch.cat(self._val_points["z"], dim=0).numpy()
-        y = torch.cat(self._val_points["y"], dim=0).numpy()
         ident = torch.cat(self._val_points["identity"], dim=0).squeeze(-1).numpy()
 
-        for name, pts in [("val/x", x), ("val/z", z), ("val/y", y)]:
+        for name in ["x", "z", "y"]:
+            points = torch.cat(self._val_points[name], dim=0).numpy()
             fig, ax = plt.subplots(figsize=(6, 6))
-            ax.scatter(pts[:, 0], pts[:, 1], c=ident, cmap="tab10", s=4, alpha=0.7)
+            ax.scatter(points[:, 0], points[:, 1], c=ident, cmap="tab10", s=4, alpha=0.7)
             ax.set_title(name)
             ax.set_aspect("equal", adjustable="box")
             self._log_figure(name, fig)
