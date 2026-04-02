@@ -4,11 +4,15 @@ dataset_train:
   point_dim: 2
   num_clusters: 3
   num_samples: 100000
+  spiral_scale: 0.5
+  radius_noise_std: 0.1
 
 dataset_val:
   point_dim: 2
   num_clusters: 3
   num_samples: 10000
+  spiral_scale: 0.5
+  radius_noise_std: 0.1
 
 model:
   input_dim: ${dataset_train.point_dim}

@@ -113,6 +113,8 @@ class ToyAutoencoderLitModule(L.LightningModule):
         dataset = EllipseClusterDataset(
             length=self._config.dataset_train.num_samples,
             point_dim=self._config.dataset_train.point_dim,
+            spiral_scale=self._config.dataset_train.spiral_scale,
+            radius_noise_std=self._config.dataset_train.radius_noise_std,
         )
 
         return DataLoader(
@@ -126,6 +128,8 @@ class ToyAutoencoderLitModule(L.LightningModule):
         dataset = EllipseClusterDataset(
             length=self._config.dataset_val.num_samples,
             point_dim=self._config.dataset_val.point_dim,
+            spiral_scale=self._config.dataset_val.spiral_scale,
+            radius_noise_std=self._config.dataset_val.radius_noise_std,
         )
         return DataLoader(
             dataset=dataset,

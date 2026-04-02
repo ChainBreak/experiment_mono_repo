@@ -56,7 +56,7 @@ def test_ellipse_cluster_dataset_scatter_plot() -> None:
     ax.set_xlabel("x")
     ax.set_ylabel("y")
     ax.legend(markerscale=2)
-    ax.set_title("EllipseClusterDataset samples")
+    ax.set_title("EllipseClusterDataset (spiral per identity)")
     fig.tight_layout()
 
     out_path = TEST_OUTPUTS / "ellipse_clusters.png"
