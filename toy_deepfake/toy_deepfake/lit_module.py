@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from itertools import chain
 
 import lightning as L
 import matplotlib.pyplot as plt
@@ -19,11 +20,11 @@ class ToyAutoencoderLitModule(L.LightningModule):
         self._config = config
 
         self.encoder = self.create_encoder()
-        self.centering = Centering(
-            num_identities=self._config.model.num_identities,
-            shape=(self._config.model.latent_dim,),
-        )
+        self.discriminator = self.create_discriminator()
+        self.identity_offsets = nn.Parameter(torch.zeros(self._config.model.num_identities, self._config.model.input_dim),requires_grad=True)
         self.decoder = self.create_decoder()
+
+        self.automatic_optimization = False
 
     def create_encoder(self) -> nn.Module:
     
@@ -47,20 +48,63 @@ class ToyAutoencoderLitModule(L.LightningModule):
             nn.SiLU(),
             nn.Linear(
                 in_features=self._config.model.hidden_dim, 
-                out_features=self._config.model.input_dim),
+                out_features=self._config.model.input_dim,
+                ),
+        )
+    
+    def create_discriminator(self) -> nn.Module:
+        return nn.Sequential(
+            nn.Linear(
+                in_features=self._config.model.latent_dim,
+                out_features=self._config.model.hidden_dim,
+            ),
+            nn.SiLU(),
+            nn.Linear(
+                in_features=self._config.model.hidden_dim, 
+                out_features=self._config.model.num_identities),
         )
 
 
     def training_step(self, batch: dict[str, torch.Tensor], batch_idx: int) -> torch.Tensor:
+        main_optimizer, discriminator_optimizer = self.optimizers()
         x = batch["point"]
         identity = batch["identity"]
+
+        # Main update
+
+        main_optimizer.zero_grad()
+        
         z = self.encoder(x)
-        z_offset, loss_center = self.centering(z, identity)
+        z_offset = z + self.identity_offsets[identity]
         y = self.decoder(z_offset)
-        loss = nn.functional.mse_loss(y, x)
-        self.log("train_loss", loss, prog_bar=True)
-        self.log("train_loss_center", loss_center, prog_bar=True)
-        return loss + loss_center
+        center_loss = self.descriminator_center_loss(z)
+        reconstruction_loss = nn.functional.mse_loss(y, x)
+        main_loss =  reconstruction_loss + center_loss
+
+        main_loss.backward()
+        main_optimizer.step()
+
+        # Discriminator update
+        discriminator_optimizer.zero_grad()
+        discriminator_loss = self.discriminator_update_loss(z.detach(), identity)
+        discriminator_loss.backward()
+        discriminator_optimizer.step()
+
+        self.log("main_loss", main_loss, prog_bar=True)
+        self.log("reconstruction_loss", reconstruction_loss, prog_bar=True)
+        self.log("center_loss", center_loss, prog_bar=True)
+        self.log("discriminator_loss", discriminator_loss, prog_bar=True)
+
+
+    def descriminator_center_loss(self, z: torch.Tensor) -> torch.Tensor:
+        pred_logits = self.discriminator(z)
+        # Uniform softmax iff class logits are equal; minimize per-sample variance across classes.
+        return pred_logits.var(dim=-1).mean()
+
+    def discriminator_update_loss(self, z: torch.Tensor, identity: torch.Tensor) -> torch.Tensor:
+        pred_logits = self.discriminator(z)
+        loss = nn.functional.cross_entropy(pred_logits,identity)
+        return loss
 
     def on_validation_start(self) -> None:
         self._val_points: defaultdict[str, list[torch.Tensor]] = defaultdict(list)
@@ -69,7 +113,7 @@ class ToyAutoencoderLitModule(L.LightningModule):
         x = batch["point"]
         identity = batch["identity"]
         z = self.encoder(x)
-        z_offset, loss_center = self.centering(z, identity)
+        z_offset = z + self.identity_offsets[identity]
         y = self.decoder(z_offset)
         self._val_points["x"].append(x.detach().cpu())
         self._val_points["z"].append(z.detach().cpu())
@@ -80,7 +124,7 @@ class ToyAutoencoderLitModule(L.LightningModule):
     def on_validation_epoch_end(self) -> None:
 
         ident = torch.cat(self._val_points["identity"], dim=0).squeeze(-1).numpy()
-        centers = self.centering.identity_centers.detach().cpu().numpy()
+        # centers = self.centering.identity_centers.detach().cpu().numpy()
 
         for name in ["x", "z", "z_offset", "y"]:
             points = torch.cat(self._val_points[name], dim=0).numpy()
@@ -103,10 +147,22 @@ class ToyAutoencoderLitModule(L.LightningModule):
         plt.close(fig)
 
     def configure_optimizers(self):
-        return torch.optim.Adam(
-            params=self.parameters(), 
+        main_params = chain(
+            self.encoder.parameters(),
+            [self.identity_offsets],
+            self.decoder.parameters(),
+        )
+        main_optimizer = torch.optim.Adam(
+            params=main_params, 
             lr=self._config.training.learning_rate,
         )
+
+        discriminator_optimizer = torch.optim.Adam(
+            params=self.discriminator.parameters(),
+            lr=self._config.training.learning_rate,
+        )
+
+        return [main_optimizer, discriminator_optimizer]
 
     def train_dataloader(self) -> DataLoader:
 
