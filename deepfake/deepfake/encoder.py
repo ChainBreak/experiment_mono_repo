@@ -4,6 +4,7 @@ from collections.abc import Generator, Sequence
 
 import torch
 import torch.nn as nn
+from omegaconf import DictConfig
 
 import deepfake.blocks as blocks_module
 
@@ -15,18 +16,15 @@ class Encoder(nn.Module):
     Between stages (except after the last), a 2x2 max-pool halves spatial size.
     """
 
-    def __init__(
-        self,
-        in_channels: int,
-        blocks: Sequence[int],
-        channels: Sequence[int],
-    ) -> None:
+    def __init__(self, config: DictConfig) -> None:
         super().__init__()
+        blocks = list(config.blocks)
+        channels = list(config.channels)
         if len(blocks) != len(channels):
             raise ValueError("blocks and channels must have the same length")
         if len(blocks) < 1:
             raise ValueError("at least one stage is required")
-        self.in_channels = in_channels
+        self.in_channels = int(config.in_channels)
         self.blocks_per_stage = tuple(blocks)
         self.channels_per_stage = tuple(channels)
         self.layers = nn.Sequential(

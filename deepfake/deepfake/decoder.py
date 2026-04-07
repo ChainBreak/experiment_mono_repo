@@ -4,6 +4,7 @@ from collections.abc import Generator, Sequence
 
 import torch
 import torch.nn as nn
+from omegaconf import DictConfig
 
 import deepfake.blocks as blocks_module
 
@@ -17,23 +18,18 @@ class Decoder(nn.Module):
     Output activation is identity (no tanh); match your data range in training/loss.
     """
 
-    def __init__(
-        self,
-        out_channels: int,
-        blocks: Sequence[int],
-        channels: Sequence[int],
-        *,
-        upsample_mode: str = "nearest",
-    ) -> None:
+    def __init__(self, config: DictConfig) -> None:
         super().__init__()
+        blocks = list(config.blocks)
+        channels = list(config.channels)
         if len(blocks) != len(channels):
             raise ValueError("blocks and channels must have the same length")
         if len(blocks) < 1:
             raise ValueError("at least one stage is required")
-        self.out_channels = out_channels
+        self.out_channels = int(config.out_channels)
         self.blocks_per_stage = tuple(blocks)
         self.channels_per_stage = tuple(channels)
-        self.upsample_mode = upsample_mode
+        self.upsample_mode = str(config.get("upsample_mode", "nearest"))
         self.layers = nn.Sequential(
             *list(self.yield_layers(self.blocks_per_stage, self.channels_per_stage))
         )

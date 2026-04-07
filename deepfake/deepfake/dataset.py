@@ -18,23 +18,11 @@ _IMAGE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".webp"})
 class IdentityImageDataset(Dataset):
     """One sample per image file; same augmented tensor for input and target."""
 
-    def __init__(
-        self,
-        *,
-        width: int,
-        height: int,
-        identity_folders: list[str | Path],
-    ) -> None:
-        self._samples = _collect_image_paths(list(identity_folders))
-        self._transform = build_augmentation_pipeline(height=height, width=width)
-
-    @classmethod
-    def from_config(cls, config: DictConfig) -> IdentityImageDataset:
-        dataset_config = config.dataset
-        return cls(
-            width=int(dataset_config.width),
-            height=int(dataset_config.height),
-            identity_folders=list(dataset_config.identity_folders),
+    def __init__(self, config: DictConfig) -> None:
+        self._samples = _collect_image_paths(list(config.identity_folders))
+        self._transform = build_augmentation_pipeline(
+            height=int(config.height),
+            width=int(config.width),
         )
 
     def __len__(self) -> int:
