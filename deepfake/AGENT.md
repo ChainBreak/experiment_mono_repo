@@ -57,7 +57,8 @@ decoder:
 ```
 
 ## Function ordering
-define functions below or after they are called.
+Define functions below or after they are called.
+Also define functions below classes.
 ie
 ```python
 def main:

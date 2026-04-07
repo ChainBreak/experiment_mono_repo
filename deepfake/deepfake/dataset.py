@@ -15,6 +15,43 @@ from torch.utils.data import Dataset
 _IMAGE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".webp"})
 
 
+class IdentityImageDataset(Dataset):
+    """One sample per image file; same augmented tensor for input and target."""
+
+    def __init__(
+        self,
+        *,
+        width: int,
+        height: int,
+        identity_folders: list[str | Path],
+    ) -> None:
+        self._samples = _collect_image_paths(list(identity_folders))
+        self._transform = build_augmentation_pipeline(height=height, width=width)
+
+    @classmethod
+    def from_config(cls, config: DictConfig) -> IdentityImageDataset:
+        dataset_config = config.dataset
+        return cls(
+            width=int(dataset_config.width),
+            height=int(dataset_config.height),
+            identity_folders=list(dataset_config.identity_folders),
+        )
+
+    def __len__(self) -> int:
+        return len(self._samples)
+
+    def __getitem__(self, index: int) -> dict[str, torch.Tensor]:
+        image_path, identity_index = self._samples[index]
+        image_numpy = _load_image_rgb_numpy(image_path)
+        augmented = self._transform(image=image_numpy)["image"]
+        identity_tensor = torch.tensor([identity_index], dtype=torch.long)
+        return {
+            "input_image": augmented,
+            "target_image": augmented,
+            "identity": identity_tensor,
+        }
+
+
 def build_augmentation_pipeline(height: int, width: int) -> A.Compose:
     """Affine, color jitter, random resize crop, then float 0–1 and CHW tensor."""
     return A.Compose(
@@ -68,45 +105,3 @@ def _load_image_rgb_numpy(path: Path) -> np.ndarray:
     with Image.open(path) as image:
         rgb = image.convert("RGB")
         return np.asarray(rgb, dtype=np.uint8)
-
-
-class IdentityImageDataset(Dataset):
-    """One sample per image file; same augmented tensor for input and target."""
-
-    def __init__(
-        self,
-        *,
-        width: int,
-        height: int,
-        identity_folders: list[str | Path],
-    ) -> None:
-        self._samples = _collect_image_paths(list(identity_folders))
-        self._transform = build_augmentation_pipeline(height=height, width=width)
-
-    @classmethod
-    def from_config(cls, config: DictConfig) -> IdentityImageDataset:
-        dataset_config = config.dataset
-        return cls(
-            width=int(dataset_config.width),
-            height=int(dataset_config.height),
-            identity_folders=list(dataset_config.identity_folders),
-        )
-
-    def __len__(self) -> int:
-        return len(self._samples)
-
-    def _paths_for_sample(self, identity_index: int, image_path: Path) -> tuple[Path, Path]:
-        """Future: return two paths when input/target may differ; same path for now."""
-        return (image_path, image_path)
-
-    def __getitem__(self, index: int) -> dict[str, torch.Tensor]:
-        image_path, identity_index = self._samples[index]
-        _input_path, _target_path = self._paths_for_sample(identity_index, image_path)
-        image_numpy = _load_image_rgb_numpy(_input_path)
-        augmented = self._transform(image=image_numpy)["image"]
-        identity_tensor = torch.tensor([identity_index], dtype=torch.long)
-        return {
-            "input_image": augmented,
-            "target_image": augmented,
-            "identity": identity_tensor,
-        }
