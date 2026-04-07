@@ -8,6 +8,8 @@ dependencies = [
     "albumentations>=1.4",
     "click>=8.0",
     "lightning>=2.0",
+    "omegaconf>=2.3",
+    "pillow>=10.0",
     "torch",
 ]
 

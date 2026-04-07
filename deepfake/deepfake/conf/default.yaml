@@ -1,0 +1,24 @@
+dataset:
+  width: 64
+  height: 64
+  identity_folders:
+    - path/to/identity_0
+
+encoder:
+  in_channels: 3
+  blocks: [2, 2, 4, 4]
+  channels: [32, 64, 128, 128]
+
+decoder:
+  out_channels: 3
+  blocks: [4, 4, 2, 2]
+  channels: [128, 128, 64, 32]
+
+discriminator:
+  enabled: false
+
+training:
+  batch_size: 32
+  learning_rate: 0.0001
+  max_epochs: 100
+  seed: 42

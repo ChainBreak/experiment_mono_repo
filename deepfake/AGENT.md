@@ -55,3 +55,19 @@ encoder:
 decoder:
   channels: $encoder.size
 ```
+
+## Function ordering
+define functions below or after they are called.
+ie
+```python
+def main:
+  helper()
+
+def helper():
+  print("i'm helping")
+```
+
+## Tests
+Use pytest as the testing frame work.
+Put test files next to the file they test.
+Ie. for `dataset.py` create `dataset_test.py`.
