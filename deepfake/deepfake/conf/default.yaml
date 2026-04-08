@@ -13,6 +13,7 @@ decoder:
   out_channels: 3
   blocks: [4, 4, 2, 2]
   channels: [128, 128, 64, 32]
+  identity_dim: 128
 
 discriminator:
   enabled: false

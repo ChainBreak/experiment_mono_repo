@@ -56,8 +56,8 @@ decoder:
   channels: $encoder.size
 ```
 
-## Function ordering
-Define functions below or after they are called.
+## Function and class ordering
+Define functions below or after where they are called.
 Also define functions below classes.
 ie
 ```python
@@ -66,6 +66,17 @@ def main:
 
 def helper():
   print("i'm helping")
+```
+In the case of multiple classes, put the main class first.
+Ie
+```python
+
+class MainClass:
+  def __init__():
+    self.helper = HelperClass()
+
+class HelperClass:
+  pass
 ```
 
 ## Tests

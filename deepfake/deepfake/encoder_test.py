@@ -20,17 +20,20 @@ def test_64_roundtrip_shapes() -> None:
             }
         )
     )
+    identity_dim = 128
     decoder = decoder_module.Decoder(
         OmegaConf.create(
             {
                 "out_channels": 3,
                 "blocks": [4, 4, 2, 2],
                 "channels": [128, 128, 64, 32],
+                "identity_dim": identity_dim,
             }
         )
     )
     x = torch.randn(batch_size, 3, height, width)
     latent = encoder(x)
     assert latent.shape == (batch_size, 128, 8, 8)
-    reconstruction = decoder(latent)
+    identity = torch.randn(batch_size, identity_dim)
+    reconstruction = decoder(latent, identity)
     assert reconstruction.shape == (batch_size, 3, height, width)
