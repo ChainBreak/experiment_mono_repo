@@ -1,5 +1,7 @@
 """Lightning module: encoder–decoder reconstruction with identity conditioning."""
 
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -7,6 +9,7 @@ from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 
 import lightning as L
+from lightning.pytorch.loggers import TensorBoardLogger
 
 import deepfake.dataset as dataset_module
 import deepfake.decoder as decoder_module
@@ -32,6 +35,19 @@ class LitModule(L.LightningModule):
         reconstruction = self.decoder(latent, identity_vector)
         loss = F.mse_loss(reconstruction, batch["target_image"])
         self.log("train_loss", loss, prog_bar=True)
+        if isinstance(self.logger, TensorBoardLogger) and batch_idx == 0:
+            log_image_as_grid(
+                self.logger.experiment,
+                batch["input_image"].detach(),
+                "train/input_image",
+                self.global_step,
+            )
+            log_image_as_grid(
+                self.logger.experiment,
+                reconstruction.detach(),
+                "train/reconstruction",
+                self.global_step,
+            )
         return loss
 
     def configure_optimizers(self):
@@ -45,5 +61,48 @@ class LitModule(L.LightningModule):
         return DataLoader(
             dataset,
             batch_size=int(self.config.training.batch_size),
-            num_workers=0,
+            num_workers=int(self.config.training.workers),
         )
+
+
+def log_image_as_grid(
+    summary_writer,
+    images: torch.Tensor,
+    tag: str,
+    global_step: int,
+) -> None:
+    """Log a batch of images (N, C, H, W) as the smallest square grid that fits N."""
+    grid = _images_to_square_grid(images)
+    summary_writer.add_image(
+        tag,
+        grid.cpu(),
+        global_step,
+        dataformats="CHW",
+    )
+
+
+def _images_to_square_grid(images: torch.Tensor) -> torch.Tensor:
+    """Arrange (N, C, H, W) into one image (C, H', W') using a minimal n×n grid (n = ceil(sqrt(N)))."""
+    images = images.detach()
+    n_image = int(images.shape[0])
+    if n_image == 0:
+        raise ValueError("images must contain at least one image")
+    grid_side = int(math.ceil(math.sqrt(n_image)))
+    n_slots = grid_side * grid_side
+    if n_image < n_slots:
+        padding = torch.zeros(
+            n_slots - n_image,
+            *images.shape[1:],
+            device=images.device,
+            dtype=images.dtype,
+        )
+        images = torch.cat([images, padding], dim=0)
+    rows: list[torch.Tensor] = []
+    for row_index in range(grid_side):
+        row_start = row_index * grid_side
+        row_images = torch.cat(
+            [images[row_start + column_index] for column_index in range(grid_side)],
+            dim=2,
+        )
+        rows.append(row_images)
+    return torch.cat(rows, dim=1)

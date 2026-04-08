@@ -3,8 +3,8 @@ from pathlib import Path
 import click
 import lightning as L
 import omegaconf
+from lightning.pytorch.loggers import TensorBoardLogger
 
-import deepfake.config as config_module
 import deepfake.lit_module as lit_module_module
 
 
@@ -44,6 +44,7 @@ def train(config_path: Path) -> None:
     trainer = L.Trainer(
         max_epochs=int(loaded_config.training.max_epochs),
         limit_train_batches=int(loaded_config.training.steps_per_epoch),
+        logger=TensorBoardLogger(save_dir="lightning_logs"),
     )
     trainer.fit(model)
 
