@@ -9,7 +9,6 @@ from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 
 import lightning as L
-from lightning.pytorch.loggers import TensorBoardLogger
 
 import deepfake.dataset as dataset_module
 import deepfake.decoder as decoder_module
@@ -35,19 +34,9 @@ class LitModule(L.LightningModule):
         reconstruction = self.decoder(latent, identity_vector)
         loss = F.mse_loss(reconstruction, batch["target_image"])
         self.log("train_loss", loss, prog_bar=True)
-        if isinstance(self.logger, TensorBoardLogger) and batch_idx == 0:
-            log_image_as_grid(
-                self.logger.experiment,
-                batch["input_image"].detach(),
-                "train/input_image",
-                self.global_step,
-            )
-            log_image_as_grid(
-                self.logger.experiment,
-                reconstruction.detach(),
-                "train/reconstruction",
-                self.global_step,
-            )
+        if batch_idx == 0:
+            self.log_image_as_grid(batch["input_image"].detach(), "train/input_image")
+            self.log_image_as_grid(reconstruction.detach(), "train/reconstruction")
         return loss
 
     def configure_optimizers(self):
@@ -64,21 +53,20 @@ class LitModule(L.LightningModule):
             num_workers=int(self.config.training.workers),
         )
 
-
-def log_image_as_grid(
-    summary_writer,
-    images: torch.Tensor,
-    tag: str,
-    global_step: int,
-) -> None:
-    """Log a batch of images (N, C, H, W) as the smallest square grid that fits N."""
-    grid = _images_to_square_grid(images)
-    summary_writer.add_image(
-        tag,
-        grid.cpu(),
-        global_step,
-        dataformats="CHW",
-    )
+    def log_image_as_grid(self, images: torch.Tensor, tag: str) -> None:
+        """Log a batch of images (N, C, H, W) as the smallest square grid that fits N."""
+        if self.logger is None:
+            return
+        experiment = getattr(self.logger, "experiment", None)
+        if experiment is None:
+            return
+        grid = _images_to_square_grid(images)
+        experiment.add_image(
+            tag,
+            grid.cpu(),
+            self.global_step,
+            dataformats="CHW",
+        )
 
 
 def _images_to_square_grid(images: torch.Tensor) -> torch.Tensor:

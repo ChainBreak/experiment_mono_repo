@@ -25,4 +25,4 @@ training:
   max_epochs: 100
   seed: 42
   steps_per_epoch: 1000
-  workers: 2
+  workers: 0
