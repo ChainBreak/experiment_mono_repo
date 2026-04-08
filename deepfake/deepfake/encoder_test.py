@@ -28,6 +28,7 @@ def test_64_roundtrip_shapes() -> None:
                 "blocks": [4, 4, 2, 2],
                 "channels": [128, 128, 64, 32],
                 "identity_dim": identity_dim,
+                "upsample_mode": "bilinear",
             }
         )
     )

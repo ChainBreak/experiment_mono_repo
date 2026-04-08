@@ -8,61 +8,31 @@ from omegaconf import DictConfig
 
 
 class Encoder(nn.Module):
-    """Encoder built from ``blocks`` and ``channels`` per stage.
-
-    Stage ``i`` applies ``blocks[i]`` blocks at width ``channels[i]``.
-    The first block of each stage after the first uses :class:`DownBlock` (stride-2)
-    to halve spatial size; other blocks use :class:`BasicBlock`.
+    """Encoder built from ``blocks_per_stage`` and ``channels_per_stage``.
     """
 
     def __init__(self, config: DictConfig) -> None:
         super().__init__()
-        blocks = list(config.blocks)
-        channels = list(config.channels)
-        if len(blocks) != len(channels):
-            raise ValueError("blocks and channels must have the same length")
-        if len(blocks) < 1:
-            raise ValueError("at least one stage is required")
+        self.blocks_per_stage = list(config.blocks)
+        self.channels_per_stage = list(config.channels)
         self.in_channels = int(config.in_channels)
-        self.blocks_per_stage = tuple(blocks)
-        self.channels_per_stage = tuple(channels)
+
         self.layers = nn.Sequential(
-            *list(self.yield_layers(self.blocks_per_stage, self.channels_per_stage))
+            *list(self.yield_layers())
         )
 
-    def yield_layers(
-        self,
-        blocks: Sequence[int],
-        channels: Sequence[int],
-    ) -> Generator[nn.Module, None, None]:
-        kernel_size = 3
-        padding = kernel_size // 2
-        yield nn.Conv2d(
-            self.in_channels,
-            channels[0],
-            kernel_size=kernel_size,
-            stride=1,
-            padding=padding,
-            bias=False,
-        )
-        yield nn.BatchNorm2d(channels[0])
-        yield nn.ReLU(inplace=True)
+    def yield_layers(self) -> Generator[nn.Module, None, None]:
+        in_channels = self.in_channels
+        blocks_and_channels = zip(self.blocks_per_stage, self.channels_per_stage) 
 
-        for stage_index in range(len(blocks)):
-            for block_index in range(blocks[stage_index]):
-                if stage_index == 0:
-                    in_ch = channels[0]
-                    out_ch = channels[0]
-                elif block_index == 0:
-                    in_ch = channels[stage_index - 1]
-                    out_ch = channels[stage_index]
-                else:
-                    in_ch = channels[stage_index]
-                    out_ch = channels[stage_index]
-                if stage_index > 0 and block_index == 0:
-                    yield DownBlock(in_ch, out_ch)
-                else:
-                    yield BasicBlock(in_ch, out_ch)
+        for i, (blocks, out_channels) in enumerate(blocks_and_channels):
+            if i > 0:
+                yield DownBlock(in_channels, out_channels)
+                in_channels = out_channels
+
+            for _ in range(blocks):
+                yield BasicBlock(in_channels, out_channels)
+                in_channels = out_channels
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.layers(x)
@@ -75,7 +45,6 @@ class BasicBlock(nn.Module):
         self,
         in_channels: int,
         out_channels: int,
-        *,
         stride: int = 1,
         kernel_size: int = 3,
         norm: type[nn.Module] = nn.BatchNorm2d,
@@ -102,7 +71,8 @@ class BasicBlock(nn.Module):
             bias=False,
         )
         self.norm2 = norm(out_channels)
-        self.downsample: nn.Module | None
+
+        self.downsample: nn.Module | None = None
         if stride != 1 or in_channels != out_channels:
             self.downsample = nn.Sequential(
                 nn.Conv2d(
@@ -114,9 +84,7 @@ class BasicBlock(nn.Module):
                 ),
                 norm(out_channels),
             )
-        else:
-            self.downsample = None
-
+      
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         shortcut = x
         out = self.conv1(x)
@@ -138,7 +106,6 @@ class DownBlock(nn.Module):
         self,
         in_channels: int,
         out_channels: int,
-        *,
         kernel_size: int = 3,
         norm: type[nn.Module] = nn.BatchNorm2d,
         activation: type[nn.Module] = nn.ReLU,

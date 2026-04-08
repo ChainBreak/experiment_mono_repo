@@ -1,6 +1,6 @@
 """Convolutional decoder: staged IdentityBlock, upsampling between stages, RGB head."""
 
-from collections.abc import Generator, Sequence
+from collections.abc import Generator
 
 import torch
 import torch.nn as nn
@@ -8,54 +8,37 @@ from omegaconf import DictConfig
 
 
 class Decoder(nn.Module):
-    """Decoder with ``channels`` ordered bottleneck (coarse) to full resolution.
-
-    Stage ``i`` applies ``blocks[i]`` identity blocks at width ``channels[i]``.
-    Between stages (except after the last), spatial size doubles via nearest upsampling.
-    The final 1x1 convolution maps ``channels[-1]`` to ``out_channels``.
-    Output activation is identity (no tanh); match your data range in training/loss.
-    """
+    """Decoder built from ``blocks_per_stage`` and ``channels_per_stage`` (coarse to fine)."""
 
     def __init__(self, config: DictConfig) -> None:
         super().__init__()
-        blocks = list(config.blocks)
-        channels = list(config.channels)
-        if len(blocks) != len(channels):
-            raise ValueError("blocks and channels must have the same length")
-        if len(blocks) < 1:
-            raise ValueError("at least one stage is required")
+        self.blocks_per_stage = list(config.blocks)
+        self.channels_per_stage = list(config.channels)
         self.out_channels = int(config.out_channels)
-        self.blocks_per_stage = tuple(blocks)
-        self.channels_per_stage = tuple(channels)
-        self.upsample_mode = str(config.get("upsample_mode", "nearest"))
-        self.identity_dim = int(config.get("identity_dim", 128))
+        self.identity_dim = int(config.identity_dim)
+        self.upsample_mode = str(config.upsample_mode)
+
         self.layers = nn.ModuleList(
-            list(self.yield_layers(self.blocks_per_stage, self.channels_per_stage))
+            list(self.yield_layers())
         )
 
-    def yield_layers(
-        self,
-        blocks: Sequence[int],
-        channels: Sequence[int],
-    ) -> Generator[nn.Module, None, None]:
-        identity_dim = self.identity_dim
-        for stage_index in range(len(blocks)):
-            if stage_index > 0:
+    def yield_layers(self) -> Generator[nn.Module, None, None]:
+        in_channels = self.channels_per_stage[0]
+        blocks_and_channels = zip(self.blocks_per_stage, self.channels_per_stage)
+
+        for i, (blocks, out_channels) in enumerate(blocks_and_channels):
+            if i > 0:
                 yield nn.Upsample(scale_factor=2.0, mode=self.upsample_mode)
 
-            for block_index in range(blocks[stage_index]):
-                if stage_index == 0:
-                    in_ch = channels[0]
-                    out_ch = channels[0]
-                elif block_index == 0:
-                    in_ch = channels[stage_index - 1]
-                    out_ch = channels[stage_index]
-                else:
-                    in_ch = channels[stage_index]
-                    out_ch = channels[stage_index]
-                yield IdentityBlock(in_ch, out_ch, identity_dim)
+            for _ in range(blocks):
+                yield IdentityBlock(
+                    in_channels,
+                    out_channels,
+                    self.identity_dim,
+                )
+                in_channels = out_channels
 
-        yield nn.Conv2d(channels[-1], self.out_channels, kernel_size=1, stride=1, padding=0)
+        yield nn.Conv2d(in_channels, self.out_channels, kernel_size=1, stride=1, padding=0)
 
     def forward(self, x: torch.Tensor, identity: torch.Tensor) -> torch.Tensor:
         for module in self.layers:
@@ -74,8 +57,6 @@ class IdentityBlock(nn.Module):
         in_channels: int,
         out_channels: int,
         identity_dim: int,
-        *,
-        stride: int = 1,
         kernel_size: int = 3,
         norm: type[nn.Module] = nn.BatchNorm2d,
         activation: type[nn.Module] = nn.ReLU,
@@ -86,7 +67,7 @@ class IdentityBlock(nn.Module):
             in_channels,
             out_channels,
             kernel_size=kernel_size,
-            stride=stride,
+            stride=1,
             padding=padding,
             bias=False,
         )
@@ -101,65 +82,34 @@ class IdentityBlock(nn.Module):
             bias=False,
         )
         self.norm2 = norm(out_channels)
-        self.downsample: nn.Module | None
-        if stride != 1 or in_channels != out_channels:
+ 
+        self.identity_linear1 = nn.Linear(identity_dim, out_channels)
+        self.identity_linear2 = nn.Linear(identity_dim, out_channels)
+
+        self.downsample: nn.Module | None = None
+        if in_channels != out_channels:
             self.downsample = nn.Sequential(
                 nn.Conv2d(
                     in_channels,
                     out_channels,
                     kernel_size=1,
-                    stride=stride,
+                    stride=1,
                     bias=False,
                 ),
                 norm(out_channels),
             )
-        else:
-            self.downsample = None
-        self.identity_linear = nn.Linear(identity_dim, out_channels)
 
     def forward(self, x: torch.Tensor, identity: torch.Tensor) -> torch.Tensor:
         shortcut = x
         out = self.conv1(x)
+        out = out * self.identity_linear1(identity).unsqueeze(-1).unsqueeze(-1)
         out = self.norm1(out)
         out = self.activation(out)
         out = self.conv2(out)
+        out = out * self.identity_linear2(identity).unsqueeze(-1).unsqueeze(-1)
         out = self.norm2(out)
         if self.downsample is not None:
-            shortcut = self.downsample(x)
+            shortcut = self.downsample(shortcut)
         out = out + shortcut
         out = self.activation(out)
-        scale = self.identity_linear(identity)
-        out = out * scale.unsqueeze(-1).unsqueeze(-1)
         return out
-
-
-class UpBlock(nn.Module):
-    """Upsample then apply an :class:`IdentityBlock`."""
-
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        identity_dim: int,
-        *,
-        scale_factor: float = 2.0,
-        mode: str = "nearest",
-        kernel_size: int = 3,
-        norm: type[nn.Module] = nn.BatchNorm2d,
-        activation: type[nn.Module] = nn.ReLU,
-    ) -> None:
-        super().__init__()
-        self.upsample = nn.Upsample(scale_factor=scale_factor, mode=mode)
-        self.block = IdentityBlock(
-            in_channels,
-            out_channels,
-            identity_dim,
-            stride=1,
-            kernel_size=kernel_size,
-            norm=norm,
-            activation=activation,
-        )
-
-    def forward(self, x: torch.Tensor, identity: torch.Tensor) -> torch.Tensor:
-        x = self.upsample(x)
-        return self.block(x, identity)
