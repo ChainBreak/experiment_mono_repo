@@ -27,8 +27,7 @@ def test_sample_keys_shapes_ranges_and_input_equals_target() -> None:
             }
         )
         dataset = dataset_module.IdentityImageDataset(config.dataset)
-        assert len(dataset) == 1
-        sample = dataset[0]
+        sample = next(iter(dataset))
         assert set(sample.keys()) == {"input_image", "target_image", "identity"}
         assert sample["input_image"].shape == (3, 64, 64)
         assert sample["target_image"].shape == (3, 64, 64)
