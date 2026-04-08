@@ -2,7 +2,7 @@ dataset:
   width: 64
   height: 64
   identity_folders:
-    - path/to/identity_0
+    - "/Users/thomasr/Documents/deepfakes/test_data/64x64"
 
 encoder:
   in_channels: 3
@@ -24,3 +24,4 @@ training:
   learning_rate: 0.0001
   max_epochs: 100
   seed: 42
+  steps_per_epoch: 500
