@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
+from torchvision.utils import make_grid
 
 import lightning as L
 
@@ -54,43 +55,20 @@ class LitModule(L.LightningModule):
         )
 
     def log_image_as_grid(self, images: torch.Tensor, tag: str) -> None:
-        """Log a batch of images (N, C, H, W) as the smallest square grid that fits N."""
+        """Log a batch of images (N, C, H, W) as a grid via ``torchvision.utils.make_grid``."""
         if self.logger is None:
             return
         experiment = getattr(self.logger, "experiment", None)
         if experiment is None:
             return
-        grid = _images_to_square_grid(images)
+        n = int(images.shape[0])
+        if n == 0:
+            raise ValueError("images must contain at least one image")
+        nrow = int(math.ceil(math.sqrt(n)))
+        grid = make_grid(images.detach(), nrow=nrow, padding=0)
         experiment.add_image(
             tag,
             grid.cpu(),
             self.global_step,
             dataformats="CHW",
         )
-
-
-def _images_to_square_grid(images: torch.Tensor) -> torch.Tensor:
-    """Arrange (N, C, H, W) into one image (C, H', W') using a minimal n×n grid (n = ceil(sqrt(N)))."""
-    images = images.detach()
-    n_image = int(images.shape[0])
-    if n_image == 0:
-        raise ValueError("images must contain at least one image")
-    grid_side = int(math.ceil(math.sqrt(n_image)))
-    n_slots = grid_side * grid_side
-    if n_image < n_slots:
-        padding = torch.zeros(
-            n_slots - n_image,
-            *images.shape[1:],
-            device=images.device,
-            dtype=images.dtype,
-        )
-        images = torch.cat([images, padding], dim=0)
-    rows: list[torch.Tensor] = []
-    for row_index in range(grid_side):
-        row_start = row_index * grid_side
-        row_images = torch.cat(
-            [images[row_start + column_index] for column_index in range(grid_side)],
-            dim=2,
-        )
-        rows.append(row_images)
-    return torch.cat(rows, dim=1)

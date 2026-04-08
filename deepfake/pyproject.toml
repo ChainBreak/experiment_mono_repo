@@ -12,6 +12,7 @@ dependencies = [
     "omegaconf>=2.3",
     "pillow>=10.0",
     "torch",
+    "torchvision",
 ]
 
 [project.scripts]
