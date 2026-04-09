@@ -40,6 +40,7 @@ def check() -> None:
 def train(config_path: Path) -> None:
     """Train the encoder–decoder from a YAML config file."""
     loaded_config = omegaconf.OmegaConf.load(config_path)
+    omegaconf.OmegaConf.resolve(loaded_config)
     model = lit_module_module.LitModule(loaded_config)
     trainer = L.Trainer(
         max_epochs=int(loaded_config.training.max_epochs),

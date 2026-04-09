@@ -1,3 +1,5 @@
+latent_dim: 128
+
 dataset:
   width: 64
   height: 64
@@ -9,17 +11,28 @@ dataset:
 encoder:
   in_channels: 3
   blocks: [2, 2, 4, 4]
-  channels: [32, 64, 128, 128]
+  channels:
+    - 32
+    - 64
+    - ${latent_dim}
+    - ${latent_dim}
 
 decoder:
   out_channels: 3
   blocks: [4, 4, 2, 2]
-  channels: [128, 128, 64, 32]
+  channels:
+    - ${latent_dim}
+    - ${latent_dim}
+    - 64
+    - 32
   identity_dim: 128
   upsample_mode: "bilinear"
 
 discriminator:
-  enabled: false
+  in_channels: ${latent_dim}
+  num_classes: 3
+  lambda_inv: 1.0
+  learning_rate: 0.001
 
 training:
   batch_size: 32
