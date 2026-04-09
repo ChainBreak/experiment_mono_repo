@@ -30,6 +30,7 @@ decoder:
 
 discriminator:
   in_channels: ${latent_dim}
+  hidden_channels: 128
   num_classes: 3
   lambda_inv: 1.0
   learning_rate: 0.001

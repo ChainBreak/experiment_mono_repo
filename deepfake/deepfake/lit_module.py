@@ -34,63 +34,49 @@ class LitModule(L.LightningModule):
             int(config.decoder.identity_dim),
         )
 
-        d_cfg = config.discriminator
-        num_classes = int(d_cfg.num_classes)
-        assert num_classes == num_identities, (
-            f"discriminator.num_classes ({num_classes}) must match "
-            f"len(dataset.identity_folders) ({num_identities})"
-        )
-        assert int(config.latent_dim) == int(d_cfg.in_channels)
-        self.discriminator = discriminator_module.Discriminator(d_cfg)
-        self._lambda_inv = float(d_cfg.lambda_inv)
-
+        self.discriminator = discriminator_module.Discriminator(config.discriminator)
+   
     def training_step(self, batch: dict[str, torch.Tensor], batch_idx: int) -> None:
-        optimizers = self.optimizers()
-        opt_ae = optimizers[0]
-        opt_d = optimizers[1]
+        optimizer_auto_encoder, optimizer_discriminator = self.optimizers()
 
-        x = batch["input_image"]
+        input_img = batch["input_image"]
         target_img = batch["target_image"]
         identity_idx = batch["identity"].squeeze(-1).long()
 
-        latent = self.encoder(x)
+        # Update the autoencoder
+        latent = self.encoder(input_img)
         identity_vector = self.identity_embedding(identity_idx)
         reconstruction = self.decoder(latent, identity_vector)
-        loss_recon = F.mse_loss(reconstruction, target_img)
 
-        was_training_d = self.discriminator.training
-        self.discriminator.eval()
-        for p in self.discriminator.parameters():
-            p.requires_grad_(False)
-        logits_inv = self.discriminator(latent)
-        loss_inv = logits_inv.var().mean()
-        for p in self.discriminator.parameters():
-            p.requires_grad_(True)
-        self.discriminator.train(was_training_d)
+        discriminator_logits = self.discriminator(latent)
+        loss_discriminator_applied = discriminator_logits.var(dim=1).mean()
+        loss_reconstruction = F.mse_loss(reconstruction, target_img)
 
-        loss_ae = loss_recon + self._lambda_inv * loss_inv
+        loss_auto_encoder = loss_reconstruction + loss_discriminator_applied
 
-        opt_ae.zero_grad()
-        self.manual_backward(loss_ae)
-        opt_ae.step()
+        optimizer_auto_encoder.zero_grad()
+        self.manual_backward(loss_auto_encoder)
+        optimizer_auto_encoder.step()
 
-        logits_d = self.discriminator(latent.detach())
-        b, _, h, w = logits_d.shape
+
+        # Update the discriminator
+        discriminator_logits = self.discriminator(latent.detach())
+        b, _, h, w = discriminator_logits.shape
         ce_target = identity_idx[:, None, None].expand(b, h, w)
-        loss_d = F.cross_entropy(logits_d, ce_target)
+        loss_discriminator_update = F.cross_entropy(discriminator_logits, ce_target)
 
-        opt_d.zero_grad()
-        self.manual_backward(loss_d)
-        opt_d.step()
+        optimizer_discriminator.zero_grad()
+        self.manual_backward(loss_discriminator_update)
+        optimizer_discriminator.step()
 
-        self.log("train_loss", loss_ae, prog_bar=True)
-        self.log("train_loss_recon", loss_recon)
-        self.log("train_loss_inv", loss_inv)
-        self.log("train_loss_d", loss_d)
+        self.log("train_loss", loss_auto_encoder, prog_bar=True)
+        self.log("train_loss_reconstruction", loss_reconstruction)
+        self.log("train_loss_discriminator_applied", loss_discriminator_applied)
+        self.log("train_loss_discriminator_update", loss_discriminator_update)
 
         if batch_idx == 0:
-            self.log_image_as_grid(batch["input_image"].detach(), "train/input_image")
-            self.log_image_as_grid(reconstruction.detach(), "train/reconstruction")
+            self.log_image_as_grid(input_img, "train/input_image")
+            self.log_image_as_grid(reconstruction, "train/reconstruction")
 
     def configure_optimizers(self):
         lr = float(self.config.training.learning_rate)
@@ -101,9 +87,9 @@ class LitModule(L.LightningModule):
             + list(self.decoder.parameters())
             + list(self.identity_embedding.parameters())
         )
-        opt_ae = torch.optim.Adam(params_ae, lr=lr)
-        opt_d = torch.optim.Adam(self.discriminator.parameters(), lr=d_lr)
-        return [opt_ae, opt_d]
+        optimizer_auto_encoder = torch.optim.Adam(params_ae, lr=lr)
+        optimizer_discriminator = torch.optim.Adam(self.discriminator.parameters(), lr=d_lr)
+        return [optimizer_auto_encoder, optimizer_discriminator]
 
     def train_dataloader(self) -> DataLoader:
         dataset = dataset_module.IdentityImageDataset(self.config.dataset)
@@ -120,6 +106,9 @@ class LitModule(L.LightningModule):
         experiment = getattr(self.logger, "experiment", None)
         if experiment is None:
             return
+
+        images = images.detach()
+
         n = int(images.shape[0])
         if n == 0:
             raise ValueError("images must contain at least one image")
