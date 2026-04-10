@@ -79,7 +79,7 @@ class LitModule(L.LightningModule):
 
         if batch_idx == 0:
             with torch.no_grad():
-                self.log_image_as_grid(input_img, "train/input_image")
+                self.log_image_as_grid(input_img, "swap/input_image")
                 self.log_image_as_grid(reconstruction, "train/reconstruction")
                 b = latent.shape[0]
                 random_id = torch.randint(
@@ -91,7 +91,7 @@ class LitModule(L.LightningModule):
                 )
                 swap_vectors = self.identity_embedding(random_id)
                 swap = self.decoder(latent.detach(), swap_vectors)
-                self.log_image_as_grid(swap, "train/swap")
+                self.log_image_as_grid(swap, "swap/swap")
 
     def configure_optimizers(self):
         lr = float(self.config.training.learning_rate)

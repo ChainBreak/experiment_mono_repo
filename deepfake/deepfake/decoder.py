@@ -1,10 +1,29 @@
-"""Convolutional decoder: staged IdentityBlock, upsampling between stages, RGB head."""
+"""Convolutional decoder: staged IdentityBlock, learned upsampling between stages, RGB head."""
 
 from collections.abc import Generator
 
 import torch
 import torch.nn as nn
 from omegaconf import DictConfig
+
+
+class UpBlock(nn.Module):
+    """2× spatial upsample: 1×1 conv expands channels for ``PixelShuffle(2)``, then shuffle."""
+
+    def __init__(self, in_channels: int) -> None:
+        super().__init__()
+        # PixelShuffle(r) maps (N, C·r², H, W) → (N, C, H·r, W·r); r=2 ⇒ 4× channel expansion.
+        self.conv = nn.Conv2d(
+            in_channels,
+            in_channels * 4,
+            kernel_size=1,
+            stride=1,
+            padding=0,
+        )
+        self.shuffle = nn.PixelShuffle(2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.shuffle(self.conv(x))
 
 
 class Decoder(nn.Module):
@@ -16,7 +35,6 @@ class Decoder(nn.Module):
         self.channels_per_stage = list(config.channels)
         self.out_channels = int(config.out_channels)
         self.identity_dim = int(config.identity_dim)
-        self.upsample_mode = str(config.upsample_mode)
 
         self.layers = nn.ModuleList(
             list(self.yield_layers())
@@ -28,7 +46,7 @@ class Decoder(nn.Module):
 
         for i, (blocks, out_channels) in enumerate(blocks_and_channels):
             if i > 0:
-                yield nn.Upsample(scale_factor=2.0, mode=self.upsample_mode)
+                yield UpBlock(in_channels)
 
             for _ in range(blocks):
                 yield IdentityBlock(
