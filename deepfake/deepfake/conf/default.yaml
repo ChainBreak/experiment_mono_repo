@@ -14,7 +14,7 @@ encoder:
   channels:
     - 32
     - 64
-    - ${latent_dim}
+    - 128
     - ${latent_dim}
 
 decoder:
@@ -22,7 +22,7 @@ decoder:
   blocks: [4, 4, 2, 2]
   channels:
     - ${latent_dim}
-    - ${latent_dim}
+    - 128
     - 64
     - 32
   identity_dim: 128
@@ -32,13 +32,12 @@ discriminator:
   in_channels: ${latent_dim}
   hidden_channels: 128
   num_classes: 3
-  lambda_inv: 1.0
-  learning_rate: 0.001
+
 
 training:
   batch_size: 32
   learning_rate: 0.001
-  max_epochs: 100
+  max_epochs: 1000
   seed: 42
   steps_per_epoch: 500
   workers: 0

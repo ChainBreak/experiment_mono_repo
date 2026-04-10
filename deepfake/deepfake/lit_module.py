@@ -1,7 +1,7 @@
 """Lightning module: encoder–decoder reconstruction with identity conditioning."""
 
 import math
-
+import itertools
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -75,20 +75,30 @@ class LitModule(L.LightningModule):
         self.log("train_loss_discriminator_update", loss_discriminator_update)
 
         if batch_idx == 0:
-            self.log_image_as_grid(input_img, "train/input_image")
-            self.log_image_as_grid(reconstruction, "train/reconstruction")
+            with torch.no_grad():
+                self.log_image_as_grid(input_img, "train/input_image")
+                self.log_image_as_grid(reconstruction, "train/reconstruction")
+                b = latent.shape[0]
+                random_id = torch.randint(
+                    0,
+                    self.identity_embedding.num_embeddings,
+                    (b,),
+                    device=latent.device,
+                    dtype=torch.long,
+                )
+                swap_vectors = self.identity_embedding(random_id)
+                swap = self.decoder(latent.detach(), swap_vectors)
+                self.log_image_as_grid(swap, "train/swap")
 
     def configure_optimizers(self):
         lr = float(self.config.training.learning_rate)
-        d_cfg = self.config.discriminator
-        d_lr = float(getattr(d_cfg, "learning_rate", lr))
-        params_ae = (
-            list(self.encoder.parameters())
-            + list(self.decoder.parameters())
-            + list(self.identity_embedding.parameters())
+        params_auto_encoder = itertools.chain(
+            self.encoder.parameters(),
+            self.decoder.parameters(),
+            self.identity_embedding.parameters(),
         )
-        optimizer_auto_encoder = torch.optim.Adam(params_ae, lr=lr)
-        optimizer_discriminator = torch.optim.Adam(self.discriminator.parameters(), lr=d_lr)
+        optimizer_auto_encoder = torch.optim.Adam(params_auto_encoder, lr=lr)
+        optimizer_discriminator = torch.optim.Adam(self.discriminator.parameters(), lr=lr)
         return [optimizer_auto_encoder, optimizer_discriminator]
 
     def train_dataloader(self) -> DataLoader:

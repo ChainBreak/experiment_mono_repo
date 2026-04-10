@@ -83,18 +83,22 @@ def _collect_image_paths_by_identity(identity_folders: list[str | Path]) -> dict
         root = Path(folder).expanduser().resolve()
         if not root.is_dir():
             raise FileNotFoundError(f"Identity folder is not a directory: {root}")
-        paths: list[Path] = []
-        # Walk the tree; only known image extensions count as training images.
-        for path in root.rglob("*"):
-            if path.is_file() and path.suffix.lower() in _IMAGE_SUFFIXES:
-                paths.append(path)
-        if not paths:
-            raise ValueError(f"No images found under identity folder: {root}")
-        paths_by_identity[identity_index] = sorted(paths)
+            
+        paths = recursivley_find_images(root)
+
+        paths_by_identity[identity_index] = paths
     if not paths_by_identity:
         raise ValueError("No images indexed: identity_folders is empty or produced no paths.")
     return paths_by_identity
 
+def recursivley_find_images(root: Path) -> list[Path]:
+    paths: list[Path] = []
+    for path in root.rglob("*"):
+        if path.is_file() and path.suffix.lower() in _IMAGE_SUFFIXES:
+            paths.append(path)
+    if not paths:
+        raise ValueError(f"No images found under identity folder: {root}")
+    return sorted(paths)
 
 def _load_image_rgb_numpy(path: Path) -> np.ndarray:
     with Image.open(path) as image:
