@@ -1,5 +1,6 @@
 # Project
 lightning_logs/
+outputs/
 
 # Byte-compiled / cache
 __pycache__/

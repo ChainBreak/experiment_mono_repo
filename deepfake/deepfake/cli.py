@@ -1,11 +1,14 @@
 from pathlib import Path
 
+import albumentations
 import click
 import lightning as L
 import omegaconf
+import torch
 from lightning.pytorch.loggers import TensorBoardLogger
 
 import deepfake.lit_module as lit_module_module
+import deepfake.render as render_module
 
 
 @click.group()
@@ -23,10 +26,6 @@ def hello() -> None:
 @main.command("check")
 def check() -> None:
     """Import core deps (useful after install)."""
-    import albumentations  # noqa: F401
-    import lightning as L  # noqa: F401
-    import torch
-
     click.echo(f"torch {torch.__version__}")
     click.echo(f"lightning {L.__version__}")
     click.echo(f"albumentations {albumentations.__version__}")
@@ -48,6 +47,9 @@ def train(config_path: Path) -> None:
         logger=TensorBoardLogger(save_dir="lightning_logs"),
     )
     trainer.fit(model)
+
+
+main.add_command(render_module.render_cmd)
 
 
 if __name__ == "__main__":
