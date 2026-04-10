@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import albumentations
+from typing import Any, cast
 import click
 import lightning as L
 import omegaconf
@@ -36,17 +37,26 @@ def check() -> None:
     "config_path",
     type=click.Path(exists=True, path_type=Path),
 )
-def train(config_path: Path) -> None:
+@click.option(
+    "--checkpoint",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Resume training from this Lightning checkpoint (weights, optimizer, step).",
+)
+def train(config_path: Path, checkpoint: Path | None) -> None:
     """Train the encoder–decoder from a YAML config file."""
     loaded_config = omegaconf.OmegaConf.load(config_path)
     omegaconf.OmegaConf.resolve(loaded_config)
-    model = lit_module_module.LitModule(loaded_config)
+    config_dict = omegaconf.OmegaConf.to_container(loaded_config, resolve=True)
+    config_dict = cast(dict[str, Any], config_dict)
+    model = lit_module_module.LitModule(config_dict)
     trainer = L.Trainer(
         max_epochs=int(loaded_config.training.max_epochs),
         limit_train_batches=int(loaded_config.training.steps_per_epoch),
         logger=TensorBoardLogger(save_dir="lightning_logs"),
     )
-    trainer.fit(model)
+    # ckpt_path = str(checkpoint) if checkpoint is not None else None
+    trainer.fit(model, ckpt_path=checkpoint)
 
 
 main.add_command(render_module.render_cmd)

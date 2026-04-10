@@ -2,6 +2,8 @@
 
 import math
 import itertools
+from typing import Any
+from typing_extensions import final
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -16,25 +18,26 @@ import deepfake.decoder as decoder_module
 import deepfake.discriminator as discriminator_module
 import deepfake.encoder as encoder_module
 
-
+@final
 class LitModule(L.LightningModule):
     """Encoder–decoder autoencoder with learned identity embeddings and latent-space discriminator."""
 
-    automatic_optimization = False
-
-    def __init__(self, config: DictConfig) -> None:
+    def __init__(self, config: dict[str, Any]) -> None:
         super().__init__()
-        OmegaConf.resolve(config)
-        self.config = config
-        self.encoder = encoder_module.Encoder(config.encoder)
-        self.decoder = decoder_module.Decoder(config.decoder)
-        num_identities = len(config.dataset.identity_folders)
+        self.save_hyperparameters()
+     
+        self.config = OmegaConf.create(self.hparams.config)
+        self.encoder = encoder_module.Encoder(self.config.encoder)
+        self.decoder = decoder_module.Decoder(self.config.decoder)
+        num_identities = len(self.config.dataset.identity_folders)
         self.identity_embedding = nn.Embedding(
             num_identities,
-            int(config.decoder.identity_dim),
+            int(self.config.decoder.identity_dim),
         )
 
-        self.discriminator = discriminator_module.Discriminator(config.discriminator)
+        self.discriminator = discriminator_module.Discriminator(self.config.discriminator)
+   
+        self.automatic_optimization = False
    
     def training_step(self, batch: dict[str, torch.Tensor], batch_idx: int) -> None:
         optimizer_auto_encoder, optimizer_discriminator = self.optimizers()
