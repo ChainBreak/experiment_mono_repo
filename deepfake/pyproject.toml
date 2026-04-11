@@ -13,6 +13,7 @@ dependencies = [
     "pillow>=10.0",
     "torch",
     "torchvision",
+    "pytest",
 ]
 
 [project.scripts]
