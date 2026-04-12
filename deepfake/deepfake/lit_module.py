@@ -7,16 +7,18 @@ from typing_extensions import final
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from omegaconf import DictConfig, OmegaConf
+from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 from torchvision.utils import make_grid
 
 import lightning as L
+import lightning.pytorch.utilities.model_summary as model_summary_module
 
 import deepfake.dataset as dataset_module
 import deepfake.decoder as decoder_module
 import deepfake.discriminator as discriminator_module
 import deepfake.encoder as encoder_module
+
 
 @final
 class LitModule(L.LightningModule):
@@ -25,7 +27,7 @@ class LitModule(L.LightningModule):
     def __init__(self, config: dict[str, Any]) -> None:
         super().__init__()
         self.save_hyperparameters()
-     
+
         self.config = OmegaConf.create(self.hparams.config)
         self.encoder = encoder_module.Encoder(self.config.encoder)
         self.decoder = decoder_module.Decoder(self.config.decoder)
@@ -36,9 +38,30 @@ class LitModule(L.LightningModule):
         )
 
         self.discriminator = discriminator_module.Discriminator(self.config.discriminator)
-   
+
+        self.example_input_array = (
+            torch.randn(1, 3, self.config.dataset.height, self.config.dataset.width),
+            torch.zeros(1, dtype=torch.long),
+        )
+
         self.automatic_optimization = False
-   
+
+    def forward(self, input_image: torch.Tensor, identity_idx: torch.Tensor) -> torch.Tensor:
+        """Full forward used for ``ModelSummary`` (``example_input_array``); matches training data flow."""
+        if identity_idx.dim() > 1:
+            identity_idx = identity_idx.squeeze(-1)
+        identity_idx = identity_idx.long()
+        latent = self.encoder(input_image)
+        identity_vector = self.identity_embedding(identity_idx)
+        reconstruction = self.decoder(latent, identity_vector)
+        _ = self.discriminator(latent)
+        return reconstruction
+
+    def on_train_start(self) -> None:
+        super().on_train_start()
+        print(model_summary_module.summarize(self, max_depth=-1))
+
+
     def training_step(self, batch: dict[str, torch.Tensor], batch_idx: int) -> None:
         optimizer_auto_encoder, optimizer_discriminator = self.optimizers()
 
