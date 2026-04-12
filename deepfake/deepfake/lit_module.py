@@ -53,7 +53,7 @@ class LitModule(L.LightningModule):
 
         discriminator_logits = self.discriminator(latent)
         loss_discriminator_applied = discriminator_logits.var(dim=1).mean()
-        loss_reconstruction = F.l1_loss(reconstruction, target_img)
+        loss_reconstruction = F.mse_loss(reconstruction, target_img) + F.l1_loss(reconstruction, target_img)
 
         loss_auto_encoder = loss_reconstruction + loss_discriminator_applied
 

@@ -1,10 +1,17 @@
 """Convolutional decoder: staged IdentityBlock, learned upsampling between stages, RGB head."""
 
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 
 import torch
 import torch.nn as nn
 from omegaconf import DictConfig
+
+
+def group_norm(num_channels: int) -> nn.GroupNorm:
+    num_groups = min(32, num_channels)
+    while num_channels % num_groups != 0:
+        num_groups -= 1
+    return nn.GroupNorm(num_groups, num_channels)
 
 
 class UpBlock(nn.Module):
@@ -13,17 +20,19 @@ class UpBlock(nn.Module):
     def __init__(self, in_channels: int) -> None:
         super().__init__()
         # PixelShuffle(r) maps (N, C·r², H, W) → (N, C, H·r, W·r); r=2 ⇒ 4× channel expansion.
-        self.conv = nn.Conv2d(
-            in_channels,
-            in_channels * 4,
-            kernel_size=1,
-            stride=1,
-            padding=0,
-        )
-        self.shuffle = nn.PixelShuffle(2)
+        # self.conv = nn.Conv2d(
+        #     in_channels,
+        #     in_channels * 4,
+        #     kernel_size=1,
+        #     stride=1,
+        #     padding=0,
+        # )
+        # self.shuffle = nn.PixelShuffle(2)
+
+        self.upsample = nn.Upsample(scale_factor=2.0, mode='nearest')
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.shuffle(self.conv(x))
+        return self.upsample(x)
 
 
 class Decoder(nn.Module):
@@ -76,8 +85,8 @@ class IdentityBlock(nn.Module):
         out_channels: int,
         identity_dim: int,
         kernel_size: int = 3,
-        norm: type[nn.Module] = nn.BatchNorm2d,
-        activation: type[nn.Module] = nn.ReLU,
+        norm: Callable[[int], nn.Module] = group_norm,
+        activation: type[nn.Module] = nn.SiLU,
     ) -> None:
         super().__init__()
         padding = kernel_size // 2

@@ -1,10 +1,17 @@
 """Convolutional encoder: stem, staged BasicBlock and DownBlock at stage boundaries."""
 
-from collections.abc import Generator, Sequence
+from collections.abc import Callable, Generator
 
 import torch
 import torch.nn as nn
 from omegaconf import DictConfig
+
+
+def group_norm(num_channels: int) -> nn.GroupNorm:
+    num_groups = min(32, num_channels)
+    while num_channels % num_groups != 0:
+        num_groups -= 1
+    return nn.GroupNorm(num_groups, num_channels)
 
 
 class Encoder(nn.Module):
@@ -39,7 +46,7 @@ class Encoder(nn.Module):
 
 
 class BasicBlock(nn.Module):
-    """Two 3x3 convolutions with batch norm, ReLU, and a residual shortcut."""
+    """Two 3x3 convolutions with group norm, SiLU, and a residual shortcut."""
 
     def __init__(
         self,
@@ -47,8 +54,8 @@ class BasicBlock(nn.Module):
         out_channels: int,
         stride: int = 1,
         kernel_size: int = 3,
-        norm: type[nn.Module] = nn.BatchNorm2d,
-        activation: type[nn.Module] = nn.ReLU,
+        norm: Callable[[int], nn.Module] = group_norm,
+        activation: type[nn.Module] = nn.SiLU,
     ) -> None:
         super().__init__()
         padding = kernel_size // 2
@@ -107,8 +114,8 @@ class DownBlock(nn.Module):
         in_channels: int,
         out_channels: int,
         kernel_size: int = 3,
-        norm: type[nn.Module] = nn.BatchNorm2d,
-        activation: type[nn.Module] = nn.ReLU,
+        norm: Callable[[int], nn.Module] = group_norm,
+        activation: type[nn.Module] = nn.SiLU,
     ) -> None:
         super().__init__()
         self.block = BasicBlock(

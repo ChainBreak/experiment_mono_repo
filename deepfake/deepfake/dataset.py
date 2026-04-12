@@ -47,8 +47,8 @@ class IdentityImageDataset(IterableDataset[dict[str, torch.Tensor]]):
 
 
 def build_augmentation_pipeline(height: int, width: int) -> A.Compose:
-    """Affine, color jitter, random resize crop, then float 0–1 and CHW tensor."""
-    return A.Compose(
+    """50% full spatial/color aug + random crop; 50% resize only; then float 0–1 and CHW tensor."""
+    augmented = A.Compose(
         [
             A.Affine(
                 scale=(0.92, 1.08),
@@ -74,6 +74,14 @@ def build_augmentation_pipeline(height: int, width: int) -> A.Compose:
             albumentations_pytorch_transforms.ToTensorV2(),
         ]
     )
+    resize_only = A.Compose(
+        [
+            A.Resize(height, width),
+            A.ToFloat(max_value=255.0),
+            albumentations_pytorch_transforms.ToTensorV2(),
+        ]
+    )
+    return A.Compose([A.OneOf([augmented, resize_only], p=1.0)])
 
 
 def _collect_image_paths_by_identity(identity_folders: list[str | Path]) -> dict[int, list[Path]]:
@@ -83,7 +91,7 @@ def _collect_image_paths_by_identity(identity_folders: list[str | Path]) -> dict
         root = Path(folder).expanduser().resolve()
         if not root.is_dir():
             raise FileNotFoundError(f"Identity folder is not a directory: {root}")
-            
+
         paths = recursivley_find_images(root)
 
         paths_by_identity[identity_index] = paths
