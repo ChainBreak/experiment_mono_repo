@@ -7,6 +7,7 @@ from pathlib import Path
 import random
 
 import albumentations as A
+import cv2
 import numpy as np
 import torch
 from albumentations.pytorch import transforms as albumentations_pytorch_transforms
@@ -55,6 +56,7 @@ def build_augmentation_pipeline(height: int, width: int) -> A.Compose:
                 rotate=(-12.0, 12.0),
                 shear=(-8.0, 8.0),
                 fit_output=False,
+                interpolation=cv2.INTER_LANCZOS4,
                 p=1.0,
             ),
             A.ColorJitter(
@@ -68,6 +70,7 @@ def build_augmentation_pipeline(height: int, width: int) -> A.Compose:
                 size=(height, width),
                 scale=(0.85, 1.0),
                 ratio=(0.9, 1.1),
+                interpolation=cv2.INTER_LANCZOS4,
                 p=1.0,
             ),
             A.ToFloat(max_value=255.0),
