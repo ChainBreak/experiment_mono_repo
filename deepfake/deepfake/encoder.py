@@ -15,7 +15,8 @@ def group_norm(num_channels: int) -> nn.GroupNorm:
 
 
 class Encoder(nn.Module):
-    """Encoder built from ``blocks_per_stage`` and ``channels_per_stage``.
+    """Encoder built from ``blocks_per_stage`` and ``channels_per_stage``,
+    plus a final 1×1 projection to ``latent_dim`` channels.
     """
 
     def __init__(self, config: DictConfig) -> None:
@@ -23,14 +24,13 @@ class Encoder(nn.Module):
         self.blocks_per_stage = list(config.blocks)
         self.channels_per_stage = list(config.channels)
         self.in_channels = int(config.in_channels)
+        self.latent_dim = int(config.latent_dim)
 
-        self.layers = nn.Sequential(
-            *list(self.yield_layers())
-        )
+        self.layers = nn.Sequential(*list(self.yield_layers()))
 
     def yield_layers(self) -> Generator[nn.Module, None, None]:
         in_channels = self.in_channels
-        blocks_and_channels = zip(self.blocks_per_stage, self.channels_per_stage) 
+        blocks_and_channels = zip(self.blocks_per_stage, self.channels_per_stage)
 
         for i, (blocks, out_channels) in enumerate(blocks_and_channels):
             if i > 0:
@@ -40,6 +40,15 @@ class Encoder(nn.Module):
             for _ in range(blocks):
                 yield BasicBlock(in_channels, out_channels)
                 in_channels = out_channels
+
+        yield nn.Conv2d(
+            in_channels,
+            self.latent_dim,
+            kernel_size=1,
+            stride=1,
+            padding=0,
+            bias=False,
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.layers(x)

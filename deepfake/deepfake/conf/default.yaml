@@ -1,4 +1,4 @@
-latent_dim: 128
+latent_dim: 8
 
 dataset:
   width: 64
@@ -9,22 +9,16 @@ dataset:
     - "/Users/thomasr/Documents/deepfakes/test_data/64x64/tom_1min_blue_glasses"
 
 encoder:
+  latent_dim: ${latent_dim}
   in_channels: 3
   blocks: [2, 2, 4, 4]
-  channels:
-    - 32
-    - 64
-    - 128
-    - ${latent_dim}
+  channels: [32, 64, 128, 256]
 
 decoder:
+  latent_dim: ${latent_dim}
   out_channels: 3
   blocks: [4, 4, 2, 2]
-  channels:
-    - ${latent_dim}
-    - 128
-    - 64
-    - 32
+  channels: [256, 128, 64, 32]
   identity_dim: 128
   upsample_mode: "bilinear"
 

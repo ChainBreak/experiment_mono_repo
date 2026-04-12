@@ -36,7 +36,7 @@ class UpBlock(nn.Module):
 
 
 class Decoder(nn.Module):
-    """Decoder built from ``blocks_per_stage`` and ``channels_per_stage`` (coarse to fine)."""
+    """Decoder: 1×1 from ``latent_dim`` to the first stage width, then staged blocks (coarse to fine)."""
 
     def __init__(self, config: DictConfig) -> None:
         super().__init__()
@@ -44,13 +44,21 @@ class Decoder(nn.Module):
         self.channels_per_stage = list(config.channels)
         self.out_channels = int(config.out_channels)
         self.identity_dim = int(config.identity_dim)
+        self.latent_dim = int(config.latent_dim)
 
-        self.layers = nn.ModuleList(
-            list(self.yield_layers())
-        )
+        self.layers = nn.ModuleList(list(self.yield_layers()))
 
     def yield_layers(self) -> Generator[nn.Module, None, None]:
-        in_channels = self.channels_per_stage[0]
+       
+        in_channels = int(self.channels_per_stage[0])
+        yield nn.Conv2d(
+            self.latent_dim,
+            in_channels,
+            kernel_size=1,
+            stride=1,
+            padding=0,
+            bias=False,
+        )
         blocks_and_channels = zip(self.blocks_per_stage, self.channels_per_stage)
 
         for i, (blocks, out_channels) in enumerate(blocks_and_channels):
