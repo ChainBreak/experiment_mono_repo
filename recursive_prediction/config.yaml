@@ -1,0 +1,11 @@
+model:
+  conv_channels: [32, 64, 128]  # one Conv -> ReLU -> MaxPool block per entry
+  hidden_size: 256
+
+training:
+  learning_rate: 1e-3
+  max_epochs: 20
+  batch_size: 128
+
+dataset:
+  data_dir: ./data
