@@ -21,34 +21,15 @@ class LitModule(L.LightningModule):
         self.batch_size = config["training"].get("batch_size", 128)
         self.data_dir = config["dataset"].get("data_dir", "./data")
 
-        self.train_loss_history: list[float] = []
-        self.val_loss_history: list[float] = []
-        self.train_accuracy_history: list[float] = []
-        self.val_accuracy_history: list[float] = []
-
-        self._train_step_losses: list[torch.Tensor] = []
-        self._train_step_accuracies: list[torch.Tensor] = []
-        self._val_step_losses: list[torch.Tensor] = []
-        self._val_step_accuracies: list[torch.Tensor] = []
-
     def training_step(self, batch: tuple, batch_idx: int) -> torch.Tensor:
         images, labels = batch
         logits = self.model(images)
         loss = nn.functional.cross_entropy(logits, labels)
         accuracy = (logits.argmax(dim=1) == labels).float().mean()
 
-        self._train_step_losses.append(loss.detach())
-        self._train_step_accuracies.append(accuracy.detach())
-
         self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("train_accuracy", accuracy, on_step=False, on_epoch=True, prog_bar=True)
         return loss
-
-    def on_train_epoch_end(self) -> None:
-        self.train_loss_history.append(torch.stack(self._train_step_losses).mean().item())
-        self.train_accuracy_history.append(torch.stack(self._train_step_accuracies).mean().item())
-        self._train_step_losses.clear()
-        self._train_step_accuracies.clear()
 
     def validation_step(self, batch: tuple, batch_idx: int) -> None:
         images, labels = batch
@@ -56,17 +37,8 @@ class LitModule(L.LightningModule):
         loss = nn.functional.cross_entropy(logits, labels)
         accuracy = (logits.argmax(dim=1) == labels).float().mean()
 
-        self._val_step_losses.append(loss.detach())
-        self._val_step_accuracies.append(accuracy.detach())
-
         self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("val_accuracy", accuracy, on_step=False, on_epoch=True, prog_bar=True)
-
-    def on_validation_epoch_end(self) -> None:
-        self.val_loss_history.append(torch.stack(self._val_step_losses).mean().item())
-        self.val_accuracy_history.append(torch.stack(self._val_step_accuracies).mean().item())
-        self._val_step_losses.clear()
-        self._val_step_accuracies.clear()
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)

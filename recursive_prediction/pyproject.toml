@@ -7,7 +7,6 @@ dependencies = [
     "torchvision",
     "lightning",
     "ghostconfig",
-    "matplotlib",
     "tensorboard",
 ]
 
