@@ -27,8 +27,8 @@ class LitModule(L.LightningModule):
         loss = nn.functional.cross_entropy(logits, labels)
         accuracy = (logits.argmax(dim=1) == labels).float().mean()
 
-        self.log("train_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("train_accuracy", accuracy, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("loss/train", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("accuracy/train", accuracy, on_step=False, on_epoch=True, prog_bar=True)
         return loss
 
     def validation_step(self, batch: tuple, batch_idx: int) -> None:
@@ -37,8 +37,8 @@ class LitModule(L.LightningModule):
         loss = nn.functional.cross_entropy(logits, labels)
         accuracy = (logits.argmax(dim=1) == labels).float().mean()
 
-        self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("val_accuracy", accuracy, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("loss/val", loss, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("accuracy/val", accuracy, on_step=False, on_epoch=True, prog_bar=True)
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
