@@ -18,12 +18,13 @@ class CifarCnn(nn.Module):
 
         spatial_size = 32 // (2 ** len(conv_channels))
         flattened_size = conv_channels[-1] * spatial_size * spatial_size
+        
 
         layers += [
             nn.Flatten(),
             nn.Linear(flattened_size, hidden_size),
             nn.ReLU(),
-            nn.Linear(hidden_size, num_classes),
+            ConditionLinear(hidden_size, num_classes, num_classes),
         ]
 
         self.layers = nn.ModuleList(layers)
@@ -31,12 +32,22 @@ class CifarCnn(nn.Module):
     def forward(self, image: torch.Tensor, probabilities: torch.Tensor) -> torch.Tensor:
         x = image
         for layer in self.layers:
-            if isinstance(layer, ConditionBlock):
+            if isinstance(layer, ConditionBlock) or isinstance(layer, ConditionLinear):
                 x = layer(x, probabilities)
             else:
                 x = layer(x)
         return x
 
+
+class ConditionLinear(nn.Module):
+    def __init__(self, in_features: int, out_features: int, condition_dim: int):
+        super().__init__()
+        self.linear = nn.Linear(in_features + condition_dim, out_features)
+
+
+    def forward(self, x: torch.Tensor, condition: torch.Tensor) -> torch.Tensor:
+        x = torch.cat([x, condition], dim=1)
+        return self.linear(x)
 
 class ConditionBlock(nn.Module):
     def __init__(self, in_channels: int, out_channels: int, condition_dim: int):
