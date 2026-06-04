@@ -18,30 +18,47 @@ class LitModule(L.LightningModule):
         super().__init__()
         config = GhostConfig.create(config)
         self.save_hyperparameters({"config": config.to_dict()})
-        
+        self.automatic_optimization = False
+
         self.model = CifarCnn(config["model"])
         self.learning_rate = config["training"].get("learning_rate", 1e-3)
         self.batch_size = config["training"].get("batch_size", 128)
+        self.num_iterations = config["training"].get("num_iterations", 3)
+        self.num_classes = config["model"].get("num_classes", 10)
         self.data_dir = config["dataset"].get("data_dir", "./data")
 
-    def training_step(self, batch: tuple, batch_idx: int) -> torch.Tensor:
+    def training_step(self, batch: tuple, batch_idx: int) -> None:
         images, labels = batch
-        logits = self.model(images)
-        loss = nn.functional.cross_entropy(logits, labels)
-        accuracy = (logits.argmax(dim=1) == labels).float().mean()
+        optimizer = self.optimizers()
+        optimizer.zero_grad()
 
-        self.log("loss/train", loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("accuracy/train", accuracy, on_step=False, on_epoch=True, prog_bar=True)
-        return loss
+        probabilities = torch.ones(images.shape[0], self.num_classes, device=images.device) / self.num_classes
+
+        for i in range(self.num_iterations):
+            logits = self.model(images, probabilities)
+            probabilities = torch.softmax(logits, dim=-1).detach()
+            loss = nn.functional.cross_entropy(logits, labels)
+            self.manual_backward(loss)
+
+            accuracy = (logits.argmax(dim=1) == labels).float().mean()
+            self.log(f"loss_train/step_{i}", loss, on_step=True, on_epoch=False)
+            self.log(f"accuracy_train/step_{i}", accuracy, on_step=True, on_epoch=False)
+
+        optimizer.step()
 
     def validation_step(self, batch: tuple, batch_idx: int) -> None:
         images, labels = batch
-        logits = self.model(images)
-        loss = nn.functional.cross_entropy(logits, labels)
-        accuracy = (logits.argmax(dim=1) == labels).float().mean()
 
-        self.log("loss/val", loss, on_step=False, on_epoch=True, prog_bar=True)
-        self.log("accuracy/val", accuracy, on_step=False, on_epoch=True, prog_bar=True)
+        probabilities = torch.ones(images.shape[0], self.num_classes, device=images.device) / self.num_classes
+
+        for i in range(self.num_iterations):
+            logits = self.model(images, probabilities)
+            probabilities = torch.softmax(logits, dim=-1).detach()
+            loss = nn.functional.cross_entropy(logits, labels)
+
+            accuracy = (logits.argmax(dim=1) == labels).float().mean()
+            self.log(f"loss_val/step_{i}", loss, on_step=False, on_epoch=True)
+            self.log(f"accuracy_val/step_{i}", accuracy, on_step=False, on_epoch=True)
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.model.parameters(), lr=self.learning_rate)
