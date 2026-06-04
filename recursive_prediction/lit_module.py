@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader, random_split
 import torchvision
 import torchvision.transforms as transforms
 from ghostconfig import GhostConfig
-
+from typing import Any
 from model import CifarCnn
 
 # CIFAR-10 channel means and stds (precomputed over the training set)
@@ -14,8 +14,11 @@ CIFAR10_STD = (0.2023, 0.1994, 0.2010)
 
 
 class LitModule(L.LightningModule):
-    def __init__(self, config: GhostConfig):
+    def __init__(self, config: GhostConfig | dict[str, Any]):
         super().__init__()
+        config = GhostConfig.create(config)
+        self.save_hyperparameters({"config": config.to_dict()})
+        
         self.model = CifarCnn(config["model"])
         self.learning_rate = config["training"].get("learning_rate", 1e-3)
         self.batch_size = config["training"].get("batch_size", 128)
