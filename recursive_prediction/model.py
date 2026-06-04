@@ -41,12 +41,21 @@ class CifarCnn(nn.Module):
 class ConditionBlock(nn.Module):
     def __init__(self, in_channels: int, out_channels: int, condition_dim: int):
         super().__init__()
-        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
-        self.relu = nn.ReLU()
+        self.conv_1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1)
+        self.non_linear = nn.SiLU()
         self.pool = nn.MaxPool2d(2)
-        self.condition_projection = nn.Linear(condition_dim, out_channels)
+        self.condition_projection = nn.Sequential(
+            nn.Linear(condition_dim, out_channels),
+            nn.SiLU(),
+            nn.Linear(out_channels, out_channels),
+            nn.SiLU(),
+            nn.Linear(out_channels, out_channels),
+        )
 
     def forward(self, x: torch.Tensor, condition: torch.Tensor) -> torch.Tensor:
-        features = self.pool(self.relu(self.conv(x)))
         channel_weights = self.condition_projection(condition).unsqueeze(-1).unsqueeze(-1)
-        return features * channel_weights
+
+        x = self.conv_1(x) * channel_weights
+        x = self.non_linear(x)
+        x = self.pool(x)
+        return x

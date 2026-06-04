@@ -8,9 +8,17 @@ from ghostconfig import GhostConfig
 from typing import Any
 from model import CifarCnn
 
-# CIFAR-10 channel means and stds (precomputed over the training set)
-CIFAR10_MEAN = (0.4914, 0.4822, 0.4465)
-CIFAR10_STD = (0.2023, 0.1994, 0.2010)
+# CIFAR-100 channel means and stds (precomputed over the training set)
+CIFAR100_MEAN = (0.5071, 0.4867, 0.4408)
+CIFAR100_STD = (0.2675, 0.2565, 0.2761)
+
+
+class GaussianNoise:
+    def __init__(self, std: float = 0.05):
+        self.std = std
+
+    def __call__(self, tensor: torch.Tensor) -> torch.Tensor:
+        return tensor + torch.randn_like(tensor) * self.std
 
 
 class LitModule(L.LightningModule):
@@ -67,17 +75,21 @@ class LitModule(L.LightningModule):
         train_transform = transforms.Compose([
             transforms.RandomHorizontalFlip(),
             transforms.RandomCrop(32, padding=4),
+            transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.1),
+            transforms.RandomGrayscale(p=0.1),
             transforms.ToTensor(),
-            transforms.Normalize(CIFAR10_MEAN, CIFAR10_STD),
+            transforms.RandomErasing(p=0.25, scale=(0.02, 0.2)),
+            GaussianNoise(std=0.05),
+            transforms.Normalize(CIFAR100_MEAN, CIFAR100_STD),
         ])
         val_transform = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize(CIFAR10_MEAN, CIFAR10_STD),
+            transforms.Normalize(CIFAR100_MEAN, CIFAR100_STD),
         ])
 
-        # Use the official CIFAR-10 train split and divide 80/20 for train/val
-        full_train = torchvision.datasets.CIFAR10(root=self.data_dir, train=True, download=True, transform=train_transform)
-        full_val = torchvision.datasets.CIFAR10(root=self.data_dir, train=True, download=True, transform=val_transform)
+        # Use the official CIFAR-100 train split and divide 80/20 for train/val
+        full_train = torchvision.datasets.CIFAR100(root=self.data_dir, train=True, download=True, transform=train_transform)
+        full_val = torchvision.datasets.CIFAR100(root=self.data_dir, train=True, download=True, transform=val_transform)
 
         train_size = int(0.8 * len(full_train))
         val_size = len(full_train) - train_size

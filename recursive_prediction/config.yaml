@@ -1,7 +1,7 @@
 model:
-  conv_channels: [32, 64, 128]  # one ConditionBlock per entry
+  conv_channels: [32, 64, 128, 256]  # one ConditionBlock per entry
   hidden_size: 256
-  num_classes: 10
+  num_classes: 100
 
 training:
   learning_rate: 1e-3
