@@ -1,0 +1,10 @@
+[project]
+name = "qwen-text-to-speech"
+version = "0.1.0"
+description = "Qwen3 TTS voice cloning experiment"
+requires-python = ">=3.11"
+dependencies = [
+    "qwen-tts",
+    "torch",
+    "soundfile",
+]
