@@ -1,0 +1,50 @@
+---
+description: Use uv as the package manager
+alwaysApply: true
+---
+
+# Package Manager: Use uv
+
+All dependency management must use [uv](https://docs.astral.sh/uv/). Never use `pip`, `poetry`, `pipenv`, `conda`, or `virtualenv` directly.
+
+## Adding and Removing Dependencies
+
+Declare dependencies in `pyproject.toml` and install them with `uv sync`. There is no need to run `uv add` manually — edit the dependency list directly, then sync.
+
+```toml
+# ✅ GOOD — edit pyproject.toml
+[project]
+dependencies = [
+    "torch",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+]
+```
+
+```bash
+# ✅ GOOD — sync after editing pyproject.toml
+uv sync
+
+# ❌ BAD — manually adding libraries
+uv add torch
+pip install torch
+poetry add torch
+pip install -r requirements.txt
+```
+
+## Running Commands
+
+Run scripts and tools through `uv run` so they use the project environment.
+
+```bash
+# ✅ GOOD
+uv run python train.py
+uv run pytest
+
+# ❌ BAD
+python train.py
+pytest
+```
