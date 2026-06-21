@@ -1,0 +1,16 @@
+[project]
+name = "self-speculation"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "torch",
+    "lightning",
+    "ghostconfig",
+    "tensorboard",
+    "matplotlib",
+    "numpy",
+    "click",
+]
+
+[tool.uv]
+package = false
