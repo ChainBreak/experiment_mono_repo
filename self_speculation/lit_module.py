@@ -1,5 +1,4 @@
-import pathlib
-
+import numpy as np
 import torch
 import torch.nn.functional as F
 import lightning as L
@@ -22,7 +21,6 @@ class LitModule(L.LightningModule):
         self.batch_size = config["training"].get("batch_size", 256)
         self.num_validation_samples = config["validation"].get("num_samples", 1000)
         self.max_refinement_steps = config["validation"].get("max_refinement_steps", 50)
-        self.histogram_dir = pathlib.Path(config["validation"].get("histogram_dir", "histograms"))
         self.mixture_config = config["dataset"]["mixture"]
 
         self.denoiser = model_module.BitDenoiser(config["model"], self.num_bits, self.num_tokens)
@@ -58,12 +56,7 @@ class LitModule(L.LightningModule):
             epoch=self.current_epoch,
         )
 
-        self.histogram_dir.mkdir(parents=True, exist_ok=True)
-        figure.savefig(self.histogram_dir / f"epoch_{self.current_epoch:04d}.png", dpi=100)
-
-        if self.logger:
-            self.logger.experiment.add_figure("generated_vs_real", figure, global_step=self.current_epoch)
-
+        self.logger.experiment.add_figure("generated_vs_real", figure, global_step=self.current_epoch)
         plt.close(figure)
 
     def configure_optimizers(self):
@@ -146,11 +139,11 @@ def _resample_rejected_tokens(
 
 
 def _plot_histogram(
-    generated: "np.ndarray",
-    real: "np.ndarray",
+    generated: np.ndarray,
+    real: np.ndarray,
     num_bits: int,
     epoch: int,
-) -> "plt.Figure":
+) -> plt.Figure:
     max_value = 2 ** num_bits - 1
     bins = min(100, max_value + 1)
 
