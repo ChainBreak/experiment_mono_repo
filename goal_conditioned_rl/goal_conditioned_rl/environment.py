@@ -23,7 +23,9 @@ def record_episodes(
     for i in range(episode_count):
         episode_path = data_path / f"episode_{next_episode_index + i:05d}"
         episode_path.mkdir()
-        _run_episode(policy, environment, episode_path)
+        # Sample a random goal from the observation space for this episode
+        goal_observation = environment.observation_space.sample()
+        _run_episode(policy, environment, episode_path, goal_observation)
 
     environment.close()
 
@@ -35,12 +37,13 @@ def render_video(
 ) -> None:
     environment = gymnasium.make(environment_id, render_mode="rgb_array")
     observation, _ = environment.reset()
+    goal_observation = environment.observation_space.sample()
     frames = [environment.render()]
 
     terminated = False
     truncated = False
     while not terminated and not truncated:
-        action = policy.select_action(observation)
+        action = policy.select_action(observation, goal_observation)
         observation, _, terminated, truncated, _ = environment.step(action)
         frames.append(environment.render())
 
@@ -55,6 +58,7 @@ def _run_episode(
     policy: lit_module_module.PolicyLitModule,
     environment: gymnasium.Env,
     episode_path: pathlib.Path,
+    goal_observation: np.ndarray,
 ) -> None:
     observation, _ = environment.reset()
     frame_index = 0
@@ -62,7 +66,7 @@ def _run_episode(
     truncated = False
 
     while not terminated and not truncated:
-        action = policy.select_action(observation)
+        action = policy.select_action(observation, goal_observation)
         next_observation, reward, terminated, truncated, _ = environment.step(action)
 
         frame_path = episode_path / f"frame_{frame_index:05d}.npz"

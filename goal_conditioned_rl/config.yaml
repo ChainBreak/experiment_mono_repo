@@ -7,10 +7,14 @@ experiments:
       id: Pendulum-v1
     policy:
       hidden_size: 128
-      max_epochs: 50
       learning_rate: 1.0e-3
       batch_size: 256
+      num_distance_classes: 100
+      num_action_classes: 11
+      distance_prob_threshold: 0.05
+    training:
+      max_epochs: 50
     runner:
-      max_iterations: 10
+      max_iterations: 20
       episodes_per_iteration: 20
       render_interval_seconds: 60
