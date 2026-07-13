@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -20,27 +21,27 @@ class PolicyLitModule(L.LightningModule):
         self.save_hyperparameters({"config": config.to_dict()})
 
         self.action_dimension = action_dimension
-        self.learning_rate = config["training"].get("learning_rate", 1e-3)
-        self.batch_size = config["training"].get("batch_size", 256)
+        self.learning_rate = config.get("learning_rate", 1e-3)
+        self.batch_size = config.get("batch_size", 256)
         self.transition_dataset = transition_dataset
 
-        hidden_size = config["policy"].get("hidden_size", 128)
+        hidden_size = config.get("hidden_size", 128)
         self.network = nn.Sequential(
             nn.Linear(observation_dimension, hidden_size),
             nn.ReLU(),
             nn.Linear(hidden_size, action_dimension),
         )
 
-    def select_action(self, observation: torch.Tensor) -> int:
-        # TODO: replace with policy.network(observation).argmax() once an RL objective is implemented
-        return torch.randint(0, self.action_dimension, (1,)).item()
+    def select_action(self, observation: np.ndarray) -> np.ndarray:
+        # TODO: replace with tanh(network(observation)) * action_scale once an RL objective is implemented
+        return np.random.uniform(-2.0, 2.0, size=(self.action_dimension,))
 
     def training_step(self, batch: tuple, batch_idx: int) -> torch.Tensor:
         observations, actions, _ = batch
-        # Placeholder: supervised cross-entropy toward the recorded (random) action.
-        # This is not a real RL objective — replace with policy gradient or Q-learning loss.
-        logits = self.network(observations)
-        loss = F.cross_entropy(logits, actions)
+        # Placeholder: MSE toward the recorded (random) action.
+        # This is not a real RL objective — replace with policy gradient or actor-critic loss.
+        predicted_actions = self.network(observations)
+        loss = F.mse_loss(predicted_actions, actions)
         self.log("loss_train", loss, on_step=True, on_epoch=False)
         return loss
 

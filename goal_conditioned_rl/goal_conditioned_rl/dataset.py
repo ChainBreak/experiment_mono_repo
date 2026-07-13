@@ -29,7 +29,7 @@ class TransitionDataset(Dataset):
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         frame = np.load(self._frame_paths[index])
         observation = torch.tensor(frame["observation"], dtype=torch.float32)
-        action = torch.tensor(int(frame["action"]), dtype=torch.long)
+        action = torch.tensor(frame["action"], dtype=torch.float32)
         reward = torch.tensor(float(frame["reward"]), dtype=torch.float32)
         return observation, action, reward
 

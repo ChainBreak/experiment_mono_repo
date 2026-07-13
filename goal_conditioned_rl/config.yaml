@@ -1,10 +1,12 @@
+video_directory: videos
+data_directory: recorded_episodes
+
 experiments:
-  - name: acrobot_random_baseline
+  - name: pendulum_random_baseline
     environment:
-      id: Acrobot-v1
+      id: Pendulum-v1
     policy:
       hidden_size: 128
-    training:
       max_epochs: 50
       learning_rate: 1.0e-3
       batch_size: 256
@@ -12,5 +14,3 @@ experiments:
       max_iterations: 10
       episodes_per_iteration: 20
       render_interval_seconds: 60
-      video_directory: videos
-      data_directory: recorded_episodes
