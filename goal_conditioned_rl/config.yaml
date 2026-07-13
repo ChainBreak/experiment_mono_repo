@@ -2,19 +2,22 @@ video_directory: videos
 data_directory: recorded_episodes
 
 experiments:
-  - name: pendulum_random_baseline
+  - name: pendulum_v02
     environment:
       id: Pendulum-v1
+      # Pendulum-v1 observation is [cos(theta), sin(theta), theta_dot]; upright = [1, 0, 0]
+      goal_observation: [1.0, 0.0, 0.0]
     policy:
       hidden_size: 128
       learning_rate: 1.0e-3
       batch_size: 256
       num_distance_classes: 100
       num_action_classes: 11
-      distance_prob_threshold: 0.05
+      distance_prob_threshold: 0.10
+      num_dataloader_workers: 8
     training:
-      max_epochs: 50
+      max_epochs: 100
     runner:
-      max_iterations: 20
-      episodes_per_iteration: 20
+      max_iterations: 100
+      episodes_per_iteration: 100
       render_interval_seconds: 60

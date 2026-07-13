@@ -26,6 +26,7 @@ class PolicyLitModule(L.LightningModule):
         self.num_distance_classes = config.get("num_distance_classes", 100)
         self.num_action_classes = config.get("num_action_classes", 11)
         self.distance_prob_threshold = config.get("distance_prob_threshold", 0.05)
+        self.num_dataloader_workers = config.get("num_dataloader_workers", 4)
         self.transition_dataset = transition_dataset
 
         hidden_size = config.get("hidden_size", 128)
@@ -107,16 +108,20 @@ class PolicyLitModule(L.LightningModule):
         action_loss = F.cross_entropy(action_logits, action_bins)
 
         loss = distance_loss + action_loss
-        self.log("loss_train", loss, on_step=True, on_epoch=False)
+        self.log("distance_loss_train", distance_loss, on_step=True, on_epoch=False)
+        self.log("action_loss_train", action_loss, on_step=True, on_epoch=False)
+        self.log("loss_train", loss, on_step=True, on_epoch=False, prog_bar=True)
         return loss
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.action_model.parameters(), lr=self.learning_rate)
+        return torch.optim.Adam(self.parameters(), lr=self.learning_rate)
 
     def train_dataloader(self) -> DataLoader:
+        print(f"Training on {len(self.transition_dataset)} episodes")
         return DataLoader(
             self.transition_dataset,
             batch_size=self.batch_size,
             shuffle=True,
-            num_workers=0,
+            num_workers=self.num_dataloader_workers,
+            persistent_workers=True,
         )

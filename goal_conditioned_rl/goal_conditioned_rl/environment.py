@@ -33,11 +33,11 @@ def record_episodes(
 def render_video(
     policy: lit_module_module.PolicyLitModule,
     environment_id: str,
+    goal_observation: np.ndarray,
     output_path: str,
 ) -> None:
     environment = gymnasium.make(environment_id, render_mode="rgb_array")
     observation, _ = environment.reset()
-    goal_observation = environment.observation_space.sample()
     frames = [environment.render()]
 
     terminated = False

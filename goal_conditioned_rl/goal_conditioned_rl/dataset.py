@@ -34,10 +34,10 @@ class TransitionDataset(Dataset):
         self._episodes = episodes
 
     def __len__(self) -> int:
-        return len(self._episodes)
+        return 50000
 
     def __getitem__(self, index: int) -> dict:
-        episode_frames = self._episodes[index]
+        episode_frames = self._episodes[index % len(self._episodes)]
 
         current_idx = random.randint(0, len(episode_frames) - 2)
         goal_idx = random.randint(current_idx + 1, len(episode_frames) - 1)

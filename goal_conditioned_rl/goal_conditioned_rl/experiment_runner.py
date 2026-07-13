@@ -2,6 +2,7 @@ import time
 
 import gymnasium
 import lightning as L
+import numpy as np
 from lightning.pytorch.callbacks import EarlyStopping
 from lightning.pytorch.loggers import TensorBoardLogger
 from ghostconfig import GhostConfig
@@ -29,6 +30,9 @@ class ExperimentRunner:
         probe_environment.close()
 
         self.environment_id = environment_id
+        self.goal_observation = np.array(
+            config["environment"].get("goal_observation", [1.0, 0.0, 0.0]), dtype=np.float32
+        )
 
         # Each experiment writes into its own subfolder so outputs never collide
         experiment_name = config.get("name", "experiment")
@@ -81,7 +85,6 @@ class ExperimentRunner:
             max_epochs=self.config["training"].get("max_epochs", 50),
             callbacks=[early_stopping],
             logger=logger,
-            enable_progress_bar=False,
         )
         trainer.fit(self.policy)
 
@@ -90,6 +93,6 @@ class ExperimentRunner:
 
     def render_environment_video(self, iteration: int) -> None:
         output_path = f"{self.video_directory}/iteration_{iteration:05d}.gif"
-        environment_module.render_video(self.policy, self.environment_id, output_path)
+        environment_module.render_video(self.policy, self.environment_id, self.goal_observation, output_path)
         self._last_render_time = time.monotonic()
         print(f"  Video saved to {output_path}")
