@@ -25,8 +25,8 @@ class ExperimentRunner:
 
         environment_id = config["environment"].get("id", "Pendulum-v1")
         probe_environment = gymnasium.make(environment_id)
-        observation_dimension = probe_environment.observation_space.shape[0]
-        action_dimension = probe_environment.action_space.shape[0]
+        self.observation_dimension = probe_environment.observation_space.shape[0]
+        self.action_dimension = probe_environment.action_space.shape[0]
         probe_environment.close()
 
         self.environment_id = environment_id
@@ -43,12 +43,7 @@ class ExperimentRunner:
         self.render_interval_seconds = config["runner"].get("render_interval_seconds", 60)
 
         self.transition_dataset = dataset_module.TransitionDataset(self.data_directory)
-        self.policy = lit_module_module.PolicyLitModule(
-            config["policy"],
-            observation_dimension,
-            action_dimension,
-            self.transition_dataset,
-        )
+        self.policy = self._build_policy()
 
         # Wall-clock time of the last video render; start at 0 so the first iteration renders
         self._last_render_time = 0.0
@@ -71,7 +66,18 @@ class ExperimentRunner:
         )
         self.transition_dataset.refresh()
 
+    def _build_policy(self) -> lit_module_module.PolicyLitModule:
+        return lit_module_module.PolicyLitModule(
+            self.config["policy"],
+            self.observation_dimension,
+            self.action_dimension,
+            self.transition_dataset,
+        )
+
     def train_model_until_plateau(self) -> None:
+        # Fresh model each run so early low-data iterations don't permanently bias the weights
+        self.policy = self._build_policy()
+
         # EarlyStopping on training loss acts as the plateau condition
         early_stopping = EarlyStopping(
             monitor="loss_train",
@@ -83,6 +89,7 @@ class ExperimentRunner:
         
         trainer = L.Trainer(
             max_epochs=self.config["training"].get("max_epochs", 50),
+            limit_train_batches=self.config["training"].get("batches_per_epoch", 200),
             callbacks=[early_stopping],
             logger=logger,
         )

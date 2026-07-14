@@ -117,11 +117,10 @@ class PolicyLitModule(L.LightningModule):
         return torch.optim.Adam(self.parameters(), lr=self.learning_rate)
 
     def train_dataloader(self) -> DataLoader:
-        print(f"Training on {len(self.transition_dataset)} episodes")
+        print(f"Training on {len(self.transition_dataset.episodes)} episodes")
         return DataLoader(
             self.transition_dataset,
             batch_size=self.batch_size,
-            shuffle=True,
             num_workers=self.num_dataloader_workers,
             persistent_workers=True,
         )
