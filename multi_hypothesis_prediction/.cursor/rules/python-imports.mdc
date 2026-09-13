@@ -1,0 +1,41 @@
+---
+description: Python import style — import modules, not names
+globs: **/*.py
+alwaysApply: false
+---
+
+# Import Style: Import Modules, Not Names
+
+Import at the module level, then reference names through the module. This makes it immediately clear where any class or function comes from when reading the code.
+
+```python
+# ❌ BAD — names imported directly, origin is lost at the call site
+from src.tokenizer import Tokenizer
+from src.model import VisionEncoder, TextDecoder
+from src.dataset import ImageCaptionDataset
+
+tokenizer = Tokenizer(config)
+encoder = VisionEncoder(config)
+
+# ✅ GOOD — module imported, origin is visible at the call site
+from src import tokenizer as tokenizer_module
+from src import model as model_module
+from src import dataset as dataset_module
+
+tokenizer = tokenizer_module.Tokenizer(config)
+encoder = model_module.VisionEncoder(config)
+dataset = dataset_module.ImageCaptionDataset(config)
+```
+
+## Exceptions
+
+Standard library and well-known third-party modules where the source is universally understood may be imported directly:
+
+```python
+# These are fine
+import torch
+import numpy as np
+import lightning as L
+import pathlib
+import dataclasses
+```

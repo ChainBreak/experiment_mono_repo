@@ -1,0 +1,68 @@
+---
+description: Python testing conventions — pytest, colocated tests, fixtures
+globs: **/*_test.py
+alwaysApply: false
+---
+
+# Testing Conventions
+
+## File Location
+
+Place test files next to the file they test, using the `_test.py` suffix:
+
+```
+dataset.py
+dataset_test.py
+
+model.py
+model_test.py
+
+trainer.py
+trainer_test.py
+```
+
+## Use `@pytest.fixture` Instead of Test Classes
+
+```python
+# ❌ BAD — unittest-style classes
+class TestDataset(unittest.TestCase):
+    def setUp(self):
+        self.dataset = Dataset("data/train")
+
+    def test_length(self):
+        self.assertEqual(len(self.dataset), 100)
+
+# ✅ GOOD — fixtures
+@pytest.fixture
+def training_dataset():
+    return Dataset("data/train")
+
+def test_dataset_length(training_dataset):
+    assert len(training_dataset) == 100
+```
+
+## Use `@pytest.mark.parametrize` for Multiple Scenarios
+
+```python
+# ❌ BAD — duplicated test functions
+def test_normalise_zero():
+    assert normalise(0.0) == 0.0
+
+def test_normalise_one():
+    assert normalise(255.0) == 1.0
+
+# ✅ GOOD — parametrized
+@pytest.mark.parametrize("pixel_value, expected", [
+    (0.0,   0.0),
+    (255.0, 1.0),
+    (127.5, 0.5),
+])
+def test_normalise_pixel(pixel_value, expected):
+    assert normalise(pixel_value) == expected
+```
+
+## General Rules
+
+- Use plain `assert` statements — no `assertEqual`, `assertTrue`, etc.
+- Name tests `test_<what it does>`, not `test_<function name>`
+- Keep each test focused on one behaviour

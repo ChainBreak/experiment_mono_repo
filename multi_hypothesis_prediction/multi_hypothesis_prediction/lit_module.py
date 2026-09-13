@@ -4,16 +4,19 @@ import torch.nn as nn
 import torch.nn.functional as F
 import dataclasses
 import numpy as np
+from ghostconfig import GhostConfig
 
 class LitModule(LightningModule):
-    def __init__(self, 
-        hidden_dim: int = 32,
-        output_dim: int = 1,
-        num_predictions: int = 32,
-    ):
+    def __init__(self, config: GhostConfig):
         super().__init__()
 
-        self.save_hyperparameters()
+        self.save_hyperparameters({"config": config.to_dict()})
+
+        
+        hidden_dim = config.get("hidden_dim", 32)
+        output_dim = config.get("output_dim", 1)
+        num_predictions = config.get("num_predictions", 32)
+        config.check()
 
         self.temperature = nn.Parameter(torch.tensor(1.0))
 

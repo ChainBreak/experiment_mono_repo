@@ -1,11 +1,12 @@
 
 from collections.abc import Iterator
 import torch
+from ghostconfig import GhostConfig
 
 class DataLoader():
 
-    def __init__(self, batch_size: int):
-        self.batch_size = batch_size
+    def __init__(self, config: GhostConfig):
+        self.batch_size = config.get("batch_size", 256)
 
     def __iter__(self) -> Iterator[dict[str, torch.Tensor]]:
         while True:

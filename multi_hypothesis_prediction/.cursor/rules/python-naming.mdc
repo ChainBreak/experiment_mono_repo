@@ -1,0 +1,68 @@
+---
+description: Python naming conventions — full words, no abbreviations
+globs: **/*.py
+alwaysApply: true
+---
+
+# Naming Conventions: Prefer Full Words
+
+Use long, descriptive names. A reader should understand what a variable holds or what a function does without any surrounding context. Avoid abbreviations and acronyms unless they are universally understood (e.g. `url`, `id`).
+
+## Variables
+
+```python
+# ❌ BAD
+img = load(p)
+hist = compute_hist(img)
+res = run(cfg)
+
+# ✅ GOOD
+image = load_image(path)
+image_histogram = compute_image_histogram(image)
+result = run_training(config)
+```
+
+## Functions
+
+```python
+# ❌ BAD
+def proc_img(p): ...
+def calc_loss(pred, tgt): ...
+def get_cfg(): ...
+
+# ✅ GOOD
+def process_image(path): ...
+def calculate_loss(prediction, target): ...
+def load_config(): ...
+```
+
+## Allowed Short Names
+
+Only use single-letter or abbreviated names for:
+
+- Loop indices: `i`, `j`, `k`
+- Math coordinates: `x`, `y`, `z`
+- Throwaway unpacking: `_`
+
+```python
+for i, image in enumerate(images):
+    ...
+
+x, y, z = position
+```
+
+## Common Substitutions
+
+| ❌ Avoid | ✅ Use instead |
+|----------|----------------|
+| `img` | `image` |
+| `cfg` | `config` |
+| `res` / `ret` | `result` |
+| `pred` | `prediction` |
+| `tgt` | `target` |
+| `src` | `source` |
+| `dst` | `destination` |
+| `buf` | `buffer` |
+| `num_` prefix | `count_` or spell out (e.g. `number_of_epochs`) |
+| `tmp` | `temporary_...` or a descriptive name |
+| `p` / `fp` | `path` / `file_path` |

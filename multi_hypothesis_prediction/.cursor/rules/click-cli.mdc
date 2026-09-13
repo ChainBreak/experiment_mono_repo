@@ -1,0 +1,62 @@
+---
+description: Use Click to build command-line interfaces
+alwaysApply: true
+---
+
+# CLI: Use Click
+
+All command-line interfaces must be built with [Click](https://click.palletsprojects.com/). Never use `argparse`, `sys.argv` parsing, or other CLI libraries.
+
+## Define Commands with Decorators
+
+Expose the entry point as a Click command and declare arguments and options with decorators.
+
+```python
+# ✅ GOOD — Click command with a typed option
+import click
+
+
+@click.command()
+@click.option("--config-path", required=True, help="Path to the training config.")
+def train(config_path: str):
+    config = GhostConfig.create(config_path)
+    run_training(config)
+
+
+if __name__ == "__main__":
+    train()
+```
+
+```python
+# ❌ BAD — argparse
+import argparse
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config-path", required=True)
+    arguments = parser.parse_args()
+    run_training(GhostConfig.create(arguments.config_path))
+```
+
+## Group Related Commands
+
+Use `@click.group()` to collect related subcommands under one entry point.
+
+```python
+@click.group()
+def cli():
+    pass
+
+
+@cli.command()
+@click.option("--config-path", required=True)
+def train(config_path: str):
+    ...
+
+
+@cli.command()
+@click.option("--checkpoint-path", required=True)
+def evaluate(checkpoint_path: str):
+    ...
+```

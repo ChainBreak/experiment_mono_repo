@@ -1,0 +1,10 @@
+model:
+  hidden_dim: 32
+  output_dim: 1
+  num_predictions: 32
+
+dataset:
+  batch_size: 256
+
+training:
+  max_steps: 3000

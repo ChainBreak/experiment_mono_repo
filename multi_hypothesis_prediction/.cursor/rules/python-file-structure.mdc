@@ -1,0 +1,68 @@
+---
+description: Python file structure and declaration order
+globs: **/*.py
+alwaysApply: true
+---
+
+# File Structure: Top-Down Readability
+
+Structure Python files so a reader sees the **main idea first**. Put the primary entry point, class, or function at the top, and helpers below. This mirrors how you'd explain the code to someone — start with the high-level concept, then reveal the details.
+
+```python
+# ✅ GOOD — main idea first, helpers below
+
+def process_data(path: str):
+    data = load_data(path)
+    result = compute_results(data)
+    print(result)
+
+
+def load_data(path: str):
+    ...
+
+
+def compute_results(data):
+    ...
+```
+
+```python
+# ❌ BAD — reader must scroll to the bottom to understand the purpose
+
+def load_data(path: str):
+    ...
+
+
+def compute_results(data):
+    ...
+
+
+def process_data(path: str):
+    data = load_data(path)
+    result = compute_results(data)
+    print(result)
+```
+
+## Ordering Rules
+
+1. **Imports** — standard library, third-party, local (as usual)
+2. **Constants / module-level config**
+3. **Primary class or function** — the main concept of this file
+4. **Supporting classes and functions** — in order of first use from above
+5. **`if __name__ == "__main__"` block** — at the very bottom
+
+## Classes
+
+The same principle applies within a class: put the most important public methods first, then private/helper methods below.
+
+```python
+class Trainer:
+    def train(self):          # ← main idea
+        self._load_data()
+        self._run_loop()
+
+    def _load_data(self):     # ← helpers below
+        ...
+
+    def _run_loop(self):
+        ...
+```

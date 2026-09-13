@@ -1,0 +1,50 @@
+---
+description: Use GhostConfig for all configuration; pass sub-configs to submodules
+alwaysApply: true
+---
+
+# Configuration: Use GhostConfig
+
+All configuration must use `ghostconfig.GhostConfig`. Never use plain dicts, dataclasses, argparse, or other config systems.
+
+## Pass Sub-configs to Submodules
+
+Slice the config with `[]` and pass the relevant sub-config into each submodule. This keeps each class self-contained — it reads only what it needs and ignores the rest.
+
+```python
+# ✅ GOOD — each submodule owns its slice of config
+class LitModule(LightningModule):
+    def __init__(self, config: GhostConfig):
+        self.model = Model(config["model"])
+        self.dataset = Dataset(config["dataset"])
+        self.learning_rate = config.get("learning_rate", 1e-3)
+        config.check()
+```
+
+```python
+# ❌ BAD — passing the whole config or a plain dict
+class LitModule(LightningModule):
+    def __init__(self, config: dict):
+        self.model = Model(config)         # model sees unrelated keys
+        self.learning_rate = config["lr"]  # KeyError instead of a helpful default
+```
+
+## Call check() Once, at the Top Level
+
+Only the top-level entry point should call `config.check()`. Submodules just read their slice; the root is responsible for validation.
+
+```python
+def train(config_path: str):
+    config = GhostConfig.create(config_path)
+    module = LitModule(config)
+    config.check()   # ← one call, after all submodules have read their keys
+```
+
+## Always Provide Defaults via get()
+
+Use `.get(key, default)` for scalar values. The default documents the expected type and serves as a fallback that `check()` will flag as missing.
+
+```python
+hidden_size = config.get("hidden_size", 256)   # ✅ self-documenting default
+hidden_size = config["hidden_size"]             # ❌ crashes immediately with no helpful message
+```

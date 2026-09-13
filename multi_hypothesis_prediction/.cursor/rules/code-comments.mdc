@@ -1,0 +1,42 @@
+---
+description: Guidelines for writing code comments
+alwaysApply: true
+---
+
+# Code Comments: Explain Why, Not What
+
+Add a short one-line comment above any block of code whose purpose isn't immediately obvious. The comment should explain **why** the code exists or **what constraint** it encodes — not narrate what the code does.
+
+```python
+# ✅ GOOD — explains the reason or constraint
+
+# Deduplicate the list if utens
+my_items = list(set(my_items))
+
+# The first two dimensions are height then width
+h, w = image.shape[0], image.shape[1]
+
+# Bradley-Terry requires at least two items to compare
+if len(items) < 2:
+    return
+
+
+# ❌ BAD — narrates what the code does (obvious from reading it)
+
+# Convert list to set then back to list
+my_items = list(set(my_items))
+
+# Get height and width
+h, w = image.shape[0], image.shape[1]
+
+# Check length
+if len(items) < 2:
+    return
+```
+
+## Rules
+
+- One line only — if you need more, the code itself needs simplifying
+- Place the comment on the line directly above the code it describes
+- Skip comments for code that is self-evident from good naming alone
+- Never use comments to narrate the code (e.g. `# Import the module`, `# Return the result`)

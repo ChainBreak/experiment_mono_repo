@@ -9,6 +9,7 @@ dependencies = [
     "lightning",
     "matplotlib",
     "tensorboard",
+    "ghostconfig",
 ]
 
 [project.scripts]
