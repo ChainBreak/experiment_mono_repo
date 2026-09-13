@@ -62,6 +62,7 @@ class ExperimentRunner:
             self.policy,
             self.episodes_per_iteration,
             self.environment_id,
+            self.goal_observation,
             self.data_directory,
         )
         self.transition_dataset.refresh()
@@ -81,6 +82,7 @@ class ExperimentRunner:
         # EarlyStopping on training loss acts as the plateau condition
         early_stopping = EarlyStopping(
             monitor="loss_train",
+            verbose=True,
             patience=3,
             mode="min",
             check_on_train_epoch_end=True,

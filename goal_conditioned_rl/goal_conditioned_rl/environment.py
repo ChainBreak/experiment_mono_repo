@@ -11,6 +11,7 @@ def record_episodes(
     policy: lit_module_module.PolicyLitModule,
     episode_count: int,
     environment_id: str,
+    goal_observation: np.ndarray,
     data_directory: str,
 ) -> None:
     data_path = pathlib.Path(data_directory)
@@ -23,9 +24,13 @@ def record_episodes(
     for i in range(episode_count):
         episode_path = data_path / f"episode_{next_episode_index + i:05d}"
         episode_path.mkdir()
-        # Sample a random goal from the observation space for this episode
-        goal_observation = environment.observation_space.sample()
-        _run_episode(policy, environment, episode_path, goal_observation)
+
+        # Half the episodes chase a random goal to diversify the training data
+        if np.random.random() < 0.5:
+            episode_goal_observation = environment.observation_space.sample()
+        else:
+            episode_goal_observation = goal_observation
+        _run_episode(policy, environment, episode_path, episode_goal_observation)
 
     environment.close()
 

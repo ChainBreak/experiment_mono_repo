@@ -25,7 +25,7 @@ class PolicyLitModule(L.LightningModule):
         self.batch_size = config.get("batch_size", 256)
         self.num_distance_classes = config.get("num_distance_classes", 100)
         self.num_action_classes = config.get("num_action_classes", 11)
-        self.distance_prob_threshold = config.get("distance_prob_threshold", 0.05)
+        self.distance_prob_threshold = config.get("distance_prob_threshold", 0.1)
         self.num_dataloader_workers = config.get("num_dataloader_workers", 4)
         self.transition_dataset = transition_dataset
 
@@ -33,17 +33,17 @@ class PolicyLitModule(L.LightningModule):
 
         self.distance_model = nn.Sequential(
             nn.Linear(observation_dimension*2, hidden_size),
-            nn.ReLU(),
+            nn.SiLU(),
             nn.Linear(hidden_size, hidden_size),
-            nn.ReLU(),
+            nn.SiLU(),
             nn.Linear(hidden_size, self.num_distance_classes),
         )
 
         self.action_model = nn.Sequential(
-            nn.Linear(observation_dimension*2 + self.num_distance_classes, hidden_size),
-            nn.ReLU(),
+            nn.Linear(observation_dimension*2 + 1, hidden_size),
+            nn.SiLU(),
             nn.Linear(hidden_size, hidden_size),
-            nn.ReLU(),
+            nn.SiLU(),
             nn.Linear(hidden_size, self.num_action_classes),
         )
 
@@ -55,6 +55,8 @@ class PolicyLitModule(L.LightningModule):
         with torch.no_grad():
             distance_logits = self.forward_distance_model(current, goal)
             distance_probs = F.softmax(distance_logits, dim=1)
+            print("distance_probs")
+            print(distance_probs)
 
             # Actual distances are only considered if they are above a threshold
             distances_above_threshold = distance_probs > self.distance_prob_threshold
@@ -68,8 +70,18 @@ class PolicyLitModule(L.LightningModule):
             action_probs = F.softmax(action_logits, dim=1)
             action_bin = torch.multinomial(action_probs, num_samples=1).item()
 
+
         # Convert discrete bin index back to continuous action value in [-2, 2]
         continuous_action = action_bin / (self.num_action_classes - 1) * 4.0 - 2.0
+
+        print("distance_probs")
+        print(distance_probs)
+        print("smallest_distance_estimate")
+        print(smallest_distance_estimate)
+        print("action_probs")
+        print(action_probs)
+        print("continuous_action")
+        print(continuous_action)
         return np.array([continuous_action], dtype=np.float32)
 
     def forward_distance_model(self, current_observation: torch.Tensor, goal_observation: torch.Tensor) -> torch.Tensor:
@@ -79,8 +91,9 @@ class PolicyLitModule(L.LightningModule):
 
     def forward_action_model(self, current_observation: torch.Tensor, goal_observation: torch.Tensor, num_of_steps: torch.Tensor) -> torch.Tensor:
         """Predict actions that will get from current to goal in the desired number of steps"""
-        steps_one_hot = F.one_hot(num_of_steps, num_classes=self.num_distance_classes)
-        x = torch.cat([current_observation, goal_observation, steps_one_hot], dim=1)
+        # The observations are (batch, obs_dim); reshape steps to (batch, 1) so they concatenate
+        num_of_steps = num_of_steps.float().unsqueeze(1) / self.num_distance_classes
+        x = torch.cat([current_observation, goal_observation, num_of_steps], dim=1)
         x = self.action_model(x)
         return x
 
@@ -110,7 +123,7 @@ class PolicyLitModule(L.LightningModule):
         loss = distance_loss + action_loss
         self.log("distance_loss_train", distance_loss, on_step=True, on_epoch=False)
         self.log("action_loss_train", action_loss, on_step=True, on_epoch=False)
-        self.log("loss_train", loss, on_step=True, on_epoch=False, prog_bar=True)
+        self.log("loss_train", loss, on_step=False, on_epoch=True, prog_bar=True)
         return loss
 
     def configure_optimizers(self):
