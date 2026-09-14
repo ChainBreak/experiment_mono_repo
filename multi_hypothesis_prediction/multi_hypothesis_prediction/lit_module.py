@@ -15,66 +15,39 @@ class LitModule(LightningModule):
         
         hidden_dim = config.get("hidden_dim", 32)
         output_dim = config.get("output_dim", 1)
-        num_predictions = config.get("num_predictions", 32)
+        num_hypotheses = config.get("num_hypotheses", 32)
+        self.learning_rate = config.get("learning_rate", 0.001)
         config.check()
 
+        self.model = FullyConnected([1, hidden_dim])
+        self.multi_hypothesis_prediction = MultiHypothesisPrediction(
+            input_dim=hidden_dim,
+            output_dim=output_dim,
+            num_hypotheses=num_hypotheses,
+        )
         self.temperature = nn.Parameter(torch.tensor(1.0))
 
-        self.model = nn.Sequential(
-            nn.Linear(1, hidden_dim),
-            nn.SiLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.SiLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.SiLU(),
-        )
-
-        self.pred_head = nn.Sequential(
-            # nn.Linear(1, hidden_dim),
-            # nn.SiLU(),
-            # nn.Linear(hidden_dim, hidden_dim),
-            # nn.SiLU(),
-            # nn.Linear(hidden_dim, hidden_dim),
-            # nn.SiLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.SiLU(),
-            nn.Linear(hidden_dim, num_predictions*output_dim),
-            Reshape(num_predictions, output_dim),
-        )
-
-        self.prob_head = nn.Sequential(
-            # nn.Linear(1, hidden_dim),
-            # nn.SiLU(),
-            # nn.Linear(hidden_dim, hidden_dim),
-            # nn.SiLU(),
-            # nn.Linear(hidden_dim, hidden_dim),
-            # nn.SiLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.SiLU(),
-            nn.Linear(hidden_dim, num_predictions),
-        )
-
-    def forward(self, x: torch.Tensor) -> "MultiHypothesisPrediction":
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.model(x)
-        return MultiHypothesisPrediction(
-            predictions=self.pred_head(x),
-            prob_logits=self.prob_head(x),
-        )
+        return self.multi_hypothesis_prediction.sample(x)
 
     def training_step(self, batch: dict[str, torch.Tensor]) -> torch.Tensor:
         x, y = batch["x"], batch["y"]
 
-        multi_hypothesis_prediction = self(x)
+        x = self.model(x)
+        predictor_loss, reconstruction_loss = self.multi_hypothesis_prediction.loss(x, y,self.temperature.data)
+        loss = 0.00001*predictor_loss +reconstruction_loss
 
+        self.log("train_loss", loss, prog_bar=True)
+        self.log("train_predictor_loss", predictor_loss, prog_bar=True)
+        self.log("train_reconstruction_loss", reconstruction_loss, prog_bar=True)
+        self.log("temperature", self.temperature.data, prog_bar=False)
 
         self.temperature.data *= 0.995
-        loss = multi_hypothesis_prediction.loss(y, temperature=self.temperature.data, lit_module=self)
-        self.log("train_loss", loss, prog_bar=True)
-        self.log("temperature", self.temperature.data, prog_bar=True)
         return loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.01)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer, 
             T_max=30000,
@@ -89,34 +62,57 @@ class LitModule(LightningModule):
             },
         }
 
-@dataclasses.dataclass
-class MultiHypothesisPrediction():
-    predictions: torch.Tensor
-    prob_logits: torch.Tensor
+class MultiHypothesisPrediction(nn.Module):
+    
+    def __init__(self,
+        input_dim: int,
+        output_dim: int,
+        num_hypotheses: int,
+        hidden_dim: int = 32,
+    ):
+        super().__init__()
+        self.hypotheses_classifier = FullyConnected([input_dim + output_dim, hidden_dim, num_hypotheses])
+        self.hypotheses_predictor = FullyConnected([input_dim, hidden_dim, num_hypotheses])
+        self.output_generator = FullyConnected([input_dim + num_hypotheses,hidden_dim, output_dim])
+        self.num_hypotheses = num_hypotheses
 
-    def sample(self) -> torch.Tensor:
-        probs = torch.softmax(self.prob_logits, dim=1)
-        prediction_index = torch.multinomial(probs, 1).unsqueeze(2)
-        return self.predictions.gather(1, prediction_index)
+    def sample(self, x: torch.Tensor) -> torch.Tensor:
 
-    def loss(self, y: torch.Tensor, temperature: float = 1000, lit_module: LitModule | None = None) -> torch.Tensor:
-        y = y.unsqueeze(1)
+        # Get a probability distribution over hypotheses
+        hypotheses_logits = self.hypotheses_predictor(x)
+        hypotheses_probs = torch.softmax(hypotheses_logits, dim=1)
 
-        loss_per_prediction = (self.predictions - y).pow(2).mean(dim=2)
-        temperature = max(temperature, 1e-10)
-        soft_min =torch.softmax(-loss_per_prediction/temperature, dim=1).detach()
+        # Sample a single hypothesis
+        hypotheses_index = torch.multinomial(hypotheses_probs, 1).squeeze(1)
 
-       
-        pred_loss = (loss_per_prediction * soft_min).mean()
+        # Convert the hypothesis index to a one-hot vector
+        hypotheses_one_hot = F.one_hot(hypotheses_index, self.num_hypotheses)
 
-        min_index = torch.argmax(soft_min, dim=1)
-        prob_loss = F.cross_entropy(self.prob_logits, min_index)
+        # Concatenate the hypothesis one-hot vector to the input
+        hypothesis_conditioned_x = torch.cat([x, hypotheses_one_hot], dim=1)
 
-        if lit_module is not None:
-            lit_module.log("prob_loss", prob_loss, prog_bar=False)
-            lit_module.log("pred_loss", pred_loss, prog_bar=False)
+        # Generate the output conditioned on the chosen hypothesis
+        output = self.output_generator(hypothesis_conditioned_x)
+        return output
 
-        return pred_loss + 0.0001*prob_loss
+
+    def loss(self, x: torch.Tensor, y: torch.Tensor, temperature: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:        
+
+        classifier_logits = self.hypotheses_classifier(torch.cat([x.detach(), y], dim=1))
+        classifier_probs = torch.softmax(classifier_logits/temperature, dim=1)
+        classifier_sampled_index = torch.multinomial(classifier_probs, 1).squeeze(1).detach()
+        classifier_target_index = torch.argmax(classifier_probs, dim=1).detach()
+        classifier_one_hot = F.one_hot(classifier_sampled_index, self.num_hypotheses)
+
+        pass_through_one_hot = classifier_probs + (classifier_one_hot - classifier_probs).detach()
+
+        output_pred = self.output_generator(torch.cat([x, pass_through_one_hot], dim=1))
+        reconstruction_loss = F.mse_loss(output_pred, y)
+
+        predictor_logits = self.hypotheses_predictor(x.detach())
+        predictor_loss = F.cross_entropy(predictor_logits, classifier_target_index)
+        
+        return predictor_loss, reconstruction_loss
 
 
 class Reshape(nn.Module):
@@ -127,3 +123,20 @@ class Reshape(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         batch_size = x.shape[0]
         return x.reshape(batch_size, *self.shape)
+
+class FullyConnected(nn.Module):
+    def __init__(self, dim_list: list[int]):
+        super().__init__()
+
+        input_list = dim_list[:-1]
+        output_list = dim_list[1:]
+
+        self.layers = nn.Sequential()
+        for input_dim, output_dim in zip(input_list, output_list):
+            self.layers.append( nn.Linear(input_dim, output_dim))
+            self.layers.append( nn.SiLU())
+
+        self.layers.append( nn.Linear(output_list[-1], output_list[-1]))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.layers(x)

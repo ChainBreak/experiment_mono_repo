@@ -44,7 +44,7 @@ def plot(model: LitModule, config: GhostConfig) -> None:
         batch = next(iter(DataLoader(config["dataset"])))
         x = batch["x"]
         y = batch["y"]
-        y_pred = model(x).sample()
+        y_pred = model(x)
         plt.scatter(x.numpy(), y.numpy(), label="True", alpha=0.1)
         plt.scatter(x.numpy(), y_pred.numpy(), label="Predicted", alpha=0.1)
         plt.legend()

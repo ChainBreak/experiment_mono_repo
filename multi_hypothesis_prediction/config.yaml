@@ -1,10 +1,11 @@
 model:
   hidden_dim: 32
   output_dim: 1
-  num_predictions: 32
+  num_hypotheses: 32
+  learning_rate: 0.001
 
 dataset:
   batch_size: 256
 
 training:
-  max_steps: 3000
+  max_steps: 10000
