@@ -9,6 +9,7 @@ from multi_hypothesis_prediction.dataloader import DataLoader
 import matplotlib.pyplot as plt
 import torch
 from lightning.pytorch.loggers import TensorBoardLogger
+from lightning.pytorch.utilities.model_summary import ModelSummary
 from ghostconfig import GhostConfig
 
 @click.group()
@@ -25,6 +26,7 @@ def train(config_path: str) -> None:
     config = GhostConfig.create(config_path)
 
     lit_module = LitModule(config["model"])
+    print(ModelSummary(lit_module, max_depth=-1))
     trainer = L.Trainer(
         max_steps=config["training"].get("max_steps", 30000),
         logger=TensorBoardLogger("lightning_logs"),
