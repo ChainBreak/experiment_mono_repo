@@ -25,9 +25,9 @@ class LitModule(LightningModule):
 
         self.multi_hypothesis_prediction = MultiHypothesisPrediction(
             config=config,
-            classifier=HypothesesClassifier(config=config["classifier"], input_dim=hidden_dim, num_hypotheses=num_hypotheses),
+            classifier=HypothesesClassifier(config=config["classifier"], input_dim=hidden_dim, output_dim=output_dim, num_hypotheses=num_hypotheses),
             predictor=HypothesesPredictor(config=config["predictor"], input_dim=hidden_dim, num_hypotheses=num_hypotheses),
-            generator=OutputGenerator(config=config["generator"], input_dim=hidden_dim, output_dim=output_dim),
+            generator=OutputGenerator(config=config["generator"], input_dim=hidden_dim, num_hypotheses=num_hypotheses, output_dim=output_dim),
         )
         self.temperature = nn.Parameter(torch.tensor(1.0))
 
@@ -95,19 +95,16 @@ class MultiHypothesisPrediction(nn.Module):
         hypotheses_index = torch.multinomial(hypotheses_probs, 1).squeeze(1)
 
         # Convert the hypothesis index to a one-hot vector
-        hypotheses_one_hot = F.one_hot(hypotheses_index,hypotheses_probs.shape[1])
-
-        # Concatenate the hypothesis one-hot vector to the input
-        hypothesis_conditioned_x = torch.cat([x, hypotheses_one_hot], dim=1)
+        hypotheses_one_hot = F.one_hot(hypotheses_index,hypotheses_probs.shape[1]).float()
 
         # Generate the output conditioned on the chosen hypothesis
-        output = self.generator(hypothesis_conditioned_x)
+        output = self.generator(x, hypotheses_one_hot)
         return output
 
 
     def loss(self, x: torch.Tensor, y: torch.Tensor, temperature: torch.Tensor,log: callable) -> tuple[torch.Tensor, torch.Tensor]:        
 
-        classifier_logits = self.classifier(torch.cat([x, y], dim=1))
+        classifier_logits = self.classifier(x, y)
         classifier_probs = torch.softmax(classifier_logits, dim=1)
         classifier_sampled_index = torch.multinomial(classifier_probs, 1).squeeze(1).detach()
         classifier_target_index = torch.argmax(classifier_probs, dim=1).detach()
@@ -119,7 +116,7 @@ class MultiHypothesisPrediction(nn.Module):
         log("max_classifier_probs", torch.max(classifier_probs))
         log("num_unique_indexes", torch.unique(classifier_sampled_index).shape[0])
 
-        output_pred = self.generator(torch.cat([x, pass_through_one_hot], dim=1))
+        output_pred = self.generator(x, pass_through_one_hot)
         reconstruction_loss = F.mse_loss(output_pred, y)
 
         predictor_logits = self.predictor(x)
@@ -129,9 +126,9 @@ class MultiHypothesisPrediction(nn.Module):
 
 
 class HypothesesClassifier(nn.Module):
-    def __init__(self, config: GhostConfig, input_dim: int, num_hypotheses: int):
+    def __init__(self, config: GhostConfig, input_dim: int, output_dim: int, num_hypotheses: int):
         super().__init__()
-        self.classifier = FullyConnected([input_dim] + config.get("hidden_dims", [32]) + [num_hypotheses])
+        self.classifier = FullyConnected([input_dim + output_dim] + config.get("hidden_dims", [32]) + [num_hypotheses])
 
     def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         return self.classifier(torch.cat([x, y], dim=1))
@@ -146,12 +143,18 @@ class HypothesesPredictor(nn.Module):
         return self.predictor(x)
 
 class OutputGenerator(nn.Module):
-    def __init__(self, config: GhostConfig, input_dim: int, output_dim: int):
+    def __init__(self, config: GhostConfig, input_dim: int, num_hypotheses: int, output_dim: int):
         super().__init__()
-        self.generator = FullyConnected([input_dim] + config.get("hidden_dims", [32]) + [output_dim])
+        self.input_full_connected = FullyConnected([input_dim] + config.get("input_hidden_dims", [32]))
+        self.on_hot_full_connected = FullyConnected([num_hypotheses] + config.get("on_hot_hidden_dims", [32]))
+        self.output_full_connected = FullyConnected(config.get("output_hidden_dims", [32]) + [output_dim])
 
     def forward(self, x: torch.Tensor, one_hot: torch.Tensor) -> torch.Tensor:
-        return self.generator(torch.cat([x, one_hot], dim=1))
+        x = self.input_full_connected(x)
+        condition = self.on_hot_full_connected(one_hot)
+
+        x = x * F.sigmoid(condition)
+        return self.output_full_connected(x)
 
 
 class FullyConnected(nn.Module):
