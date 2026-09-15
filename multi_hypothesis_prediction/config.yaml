@@ -3,11 +3,12 @@ model:
   output_dim: 1
   num_hypotheses: 8
   learning_rate: 0.001
+  uniform_blend_end_steps: 15000
 
   classifier:
-    hidden_dims: [64]
+    hidden_dims: [64,64]
   predictor:
-    hidden_dims: [64]
+    hidden_dims: [64,64]
   generator:
     input_hidden_dims: [64,64]
     on_hot_hidden_dims: [64,64]
@@ -18,4 +19,4 @@ dataset:
   batch_size: 256
 
 training:
-  max_steps: 10000
+  max_steps: 20000
