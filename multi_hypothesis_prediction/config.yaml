@@ -1,9 +1,8 @@
 model:
   hidden_dim: 64
   output_dim: 1
-  num_hypotheses: 8
+  num_hypotheses: 32
   learning_rate: 0.001
-  uniform_blend_end_steps: 15000
 
   classifier:
     hidden_dims: [64,64]

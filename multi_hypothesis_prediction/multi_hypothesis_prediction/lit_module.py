@@ -17,8 +17,6 @@ class LitModule(LightningModule):
         output_dim = config.get("output_dim", 1)
         num_hypotheses = config.get("num_hypotheses", 32)
         self.learning_rate = config.get("learning_rate", 0.001)
-        self.uniform_blend_end_steps = config.get("uniform_blend_end_steps", 10000)
-        
 
         self.model = nn.Sequential(
             nn.Linear(1, hidden_dim),
@@ -45,11 +43,9 @@ class LitModule(LightningModule):
     def training_step(self, batch: dict[str, torch.Tensor]) -> torch.Tensor:
         x, y = batch["x"], batch["y"]
 
-        uniform_blend = min(self.global_step / self.uniform_blend_end_steps, 1.0)
-
         x = self.model(x)
-        predictor_loss, reconstruction_loss = self.multi_hypothesis_prediction.loss(x, y, uniform_blend ,self.log)
-        loss = 0.0001*predictor_loss +reconstruction_loss
+        predictor_loss, reconstruction_loss = self.multi_hypothesis_prediction.loss(x, y, float(self.temperature.data), self.log)
+        loss = 0.01*predictor_loss +reconstruction_loss
 
         self.log("train_loss", loss, prog_bar=True)
         self.log("train_predictor_loss", predictor_loss, prog_bar=True)
@@ -91,45 +87,30 @@ class MultiHypothesisPrediction(nn.Module):
         self.generator = generator
 
     def sample(self, x: torch.Tensor) -> torch.Tensor:
-
-        # Get a probability distribution over hypotheses
         hypotheses_logits = self.predictor(x)
-        hypotheses_probs = torch.softmax(hypotheses_logits, dim=1)
-
-        # Sample a single hypothesis
-        hypotheses_index = torch.multinomial(hypotheses_probs, 1).squeeze(1)
-
-        # Convert the hypothesis index to a one-hot vector
-        hypotheses_one_hot = F.one_hot(hypotheses_index,hypotheses_probs.shape[1]).float()
-
-        # Generate the output conditioned on the chosen hypothesis
+        hypotheses_one_hot = F.gumbel_softmax(hypotheses_logits, tau=1.0, hard=True, dim=1)
         output = self.generator(x, hypotheses_one_hot)
         return output
 
 
-    def loss(self, x: torch.Tensor, y: torch.Tensor, uniform_blend: float,log: callable) -> tuple[torch.Tensor, torch.Tensor]:        
+    def loss(self, x: torch.Tensor, y: torch.Tensor, temperature: float, log: callable) -> tuple[torch.Tensor, torch.Tensor]:        
 
         classifier_logits = self.classifier(x.detach(), y)
         classifier_probs = torch.softmax(classifier_logits, dim=1)
-        uniform_probs = torch.ones_like(classifier_probs) / classifier_probs.shape[1]
-        classifier_probs_soft = classifier_probs * uniform_blend + uniform_probs * (1 - uniform_blend)
 
-        classifier_sampled_index = torch.multinomial(classifier_probs_soft, 1).squeeze(1).detach()
-        classifier_target_index = torch.argmax(classifier_probs, dim=1).detach()
-        # classifier_one_hot = torch.softmax(classifier_logits/temperature, dim=1).detach()
-        classifier_one_hot = F.one_hot(classifier_sampled_index, classifier_probs.shape[1]).detach()
-        print("classifier_one_hot", classifier_one_hot[:10])
-        pass_through_one_hot =  classifier_probs_soft - classifier_probs_soft.detach() + classifier_one_hot
+        # Hard in the forward pass, soft Gumbel probabilities in the backward pass
+        pass_through_one_hot = F.gumbel_softmax(classifier_logits, tau=1.0, hard=True, dim=1)
+        classifier_sampled_index = pass_through_one_hot.argmax(dim=1)
+        # classifier_target_index = torch.argmax(classifier_probs, dim=1).detach()
 
-        log("max_classifier_probs", torch.max(classifier_probs,dim=1).values.mean())
-        log("max_classifier_probs_soft", torch.max(classifier_probs_soft,dim=1).values.mean())
+        log("max_classifier_probs", torch.max(classifier_probs, dim=1).values.mean())
         log("num_unique_indexes", torch.unique(classifier_sampled_index).shape[0])
 
         output_pred = self.generator(x, pass_through_one_hot)
         reconstruction_loss = F.mse_loss(output_pred, y)
 
         predictor_logits = self.predictor(x)
-        predictor_loss = F.cross_entropy(predictor_logits, classifier_target_index)
+        predictor_loss = F.cross_entropy(predictor_logits, classifier_sampled_index)
         
         return predictor_loss, reconstruction_loss
 
@@ -162,18 +143,21 @@ class HypothesesPredictor(nn.Module):
 class OutputGenerator(nn.Module):
     def __init__(self, config: GhostConfig, input_dim: int, num_hypotheses: int, output_dim: int):
         super().__init__()
-        self.input_full_connected = FullyConnected([input_dim] + config.get("input_hidden_dims", [32]))
-        self.on_hot_full_connected = FullyConnected([num_hypotheses] + config.get("on_hot_hidden_dims", [32]))
-        self.output_full_connected = FullyConnected(config.get("output_hidden_dims", [32]))
-        self.output_linear = nn.Linear(config.get("output_hidden_dims", [32])[-1], output_dim)
+
+        self.input_model = nn.Sequential(
+            FullyConnected([input_dim] + config.get("input_hidden_dims", [32])),
+            nn.Linear(config.get("input_hidden_dims", [32])[-1], output_dim),
+            )
+        self.on_hot_model = nn.Sequential(
+            FullyConnected([num_hypotheses] + config.get("on_hot_hidden_dims", [32])),
+            nn.Linear(config.get("on_hot_hidden_dims", [32])[-1], output_dim),
+            )
+
 
     def forward(self, x: torch.Tensor, one_hot: torch.Tensor) -> torch.Tensor:
-        x = self.input_full_connected(x)
-        condition = self.on_hot_full_connected(one_hot)
 
-        x = x * F.sigmoid(condition)
-        x = self.output_full_connected(x)
-        x = self.output_linear(x)
+        x = self.input_model(x) + self.on_hot_model(one_hot)
+
         return x
 
 
