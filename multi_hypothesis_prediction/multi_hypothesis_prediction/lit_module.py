@@ -29,7 +29,6 @@ class LitModule(LightningModule):
             predictor=HypothesesPredictor(config=config["predictor"], input_dim=hidden_dim, num_hypotheses=num_hypotheses),
             generator=OutputGenerator(config=config["generator"], input_dim=hidden_dim, num_hypotheses=num_hypotheses, output_dim=output_dim),
         )
-        self.temperature = nn.Parameter(torch.tensor(100.0))
 
         # Example input for model summary
         self.example_input_array = torch.randn(1, 1)
@@ -44,16 +43,12 @@ class LitModule(LightningModule):
         x, y = batch["x"], batch["y"]
 
         x = self.model(x)
-        predictor_loss, reconstruction_loss = self.multi_hypothesis_prediction.loss(x, y, float(self.temperature.data), self.log)
+        predictor_loss, reconstruction_loss = self.multi_hypothesis_prediction.loss(x, y, self.log)
         loss = 0.01*predictor_loss +reconstruction_loss
 
         self.log("train_loss", loss, prog_bar=True)
         self.log("train_predictor_loss", predictor_loss, prog_bar=True)
         self.log("train_reconstruction_loss", reconstruction_loss, prog_bar=True)
-        self.log("temperature", self.temperature.data, prog_bar=False)
-
-        self.temperature.data *= 0.999
-        self.temperature.data = torch.clamp(self.temperature.data, min=1.0)
     
         return loss
 
@@ -93,17 +88,14 @@ class MultiHypothesisPrediction(nn.Module):
         return output
 
 
-    def loss(self, x: torch.Tensor, y: torch.Tensor, temperature: float, log: callable) -> tuple[torch.Tensor, torch.Tensor]:        
+    def loss(self, x: torch.Tensor, y: torch.Tensor, log: callable) -> tuple[torch.Tensor, torch.Tensor]:        
 
-        classifier_logits = self.classifier(x.detach(), y)
-        classifier_probs = torch.softmax(classifier_logits, dim=1)
+        classifier_logits = self.classifier(x, y)
 
         # Hard in the forward pass, soft Gumbel probabilities in the backward pass
         pass_through_one_hot = F.gumbel_softmax(classifier_logits, tau=1.0, hard=True, dim=1)
+        
         classifier_sampled_index = pass_through_one_hot.argmax(dim=1)
-        # classifier_target_index = torch.argmax(classifier_probs, dim=1).detach()
-
-        log("max_classifier_probs", torch.max(classifier_probs, dim=1).values.mean())
         log("num_unique_indexes", torch.unique(classifier_sampled_index).shape[0])
 
         output_pred = self.generator(x, pass_through_one_hot)
@@ -145,7 +137,7 @@ class OutputGenerator(nn.Module):
         super().__init__()
 
         self.input_model = nn.Sequential(
-            FullyConnected([input_dim] + config.get("input_hidden_dims", [32])),
+            FullyConnected([input_dim + num_hypotheses] + config.get("input_hidden_dims", [32])),
             nn.Linear(config.get("input_hidden_dims", [32])[-1], output_dim),
             )
         self.on_hot_model = nn.Sequential(
@@ -155,8 +147,9 @@ class OutputGenerator(nn.Module):
 
 
     def forward(self, x: torch.Tensor, one_hot: torch.Tensor) -> torch.Tensor:
-
-        x = self.input_model(x) + self.on_hot_model(one_hot)
+        # This detach is important. Without the one hot will collapse to not enough modes.
+        x_concat = torch.cat([x, one_hot.detach()], dim=1)
+        x = self.input_model(x_concat) + self.on_hot_model(one_hot)
 
         return x
 
