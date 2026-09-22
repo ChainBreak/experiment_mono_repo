@@ -11,23 +11,39 @@ class DataLoader():
     def __iter__(self) -> Iterator[dict[str, torch.Tensor]]:
         while True:
             batch = self._generate_batch()
-
             yield batch
 
 
     def _generate_batch(self) -> dict[str, torch.Tensor]:
         x = torch.rand(self.batch_size,1)
 
-        f1 = x
-        f2 = x**2
+        f1 = 0*x + 3 -1.5
+        f2 = 0*x + 2 -1.5
+        f3 = 0*x + 1 -1.5
+        f4 = 0*x + 0 -1.5
 
-        m3 = torch.clamp(x*2-1, 0, 1)
-        f3 = torch.cos(m3)*3
-        f3 = m3*f3 + (1-m3)*f2
+        b1 = torch.sigmoid((x-0.25)*30)
+        b2 = torch.sigmoid((x-0.5)*30)
+        b3 = torch.sigmoid((x-0.75)*30)
 
-        f = torch.cat([f1, f2, f3], dim=1)
+        f12 = (f1+f2)/2    
+        f1234 = (f1+f2+f3+f4)/4
+        f34 = (f3+f4)/2
 
-        index = torch.randint(0, f.shape[1], (self.batch_size,1))
+        f12_ = b1*f12 + (1-b1)*f1234  
+        f34_ = b1*f34 + (1-b1)*f1234    
+
+
+        f1 = b2*f1 + (1-b2)*f12_
+        f2 = b2*f2 + (1-b2)*f12_
+        f3 = b3*f3 + (1-b3)*f34_
+        f4 = b3*f4 + (1-b3)*f34_
+
+
+        f = torch.cat([f1, f2, f3, f4], dim=1)
+        weights = torch.tensor([60,25,10,5]).float()
+
+        index = torch.multinomial(weights, self.batch_size, replacement=True).unsqueeze(1)
         y = torch.gather(f, dim=1, index=index)
-        # y = y.repeat(1,5)
+        
         return {"x": x, "y": y}

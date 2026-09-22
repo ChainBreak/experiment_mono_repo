@@ -34,8 +34,8 @@ def train(config_path: str) -> None:
     trainer.fit(lit_module,
         train_dataloaders=DataLoader(config["dataset"]),
     )
-    config.check()
     plot(lit_module, config)
+    config.check()
 
 def plot(model: LitModule, config: GhostConfig) -> None:
     output_dir = pathlib.Path("outputs")
@@ -43,7 +43,7 @@ def plot(model: LitModule, config: GhostConfig) -> None:
     output_path = output_dir / (datetime.datetime.now().strftime("%Y%m%d_%H%M%S") + ".png")
     with torch.no_grad():
 
-        batch = next(iter(DataLoader(config["dataset"])))
+        batch = next(iter(DataLoader(config["val_dataset"])))
         x = batch["x"]
         y = batch["y"]
         y_pred = model(x)

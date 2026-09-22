@@ -17,5 +17,8 @@ model:
 dataset:
   batch_size: 256
 
+val_dataset:
+  batch_size: 2000
+
 training:
   max_steps: 20000
