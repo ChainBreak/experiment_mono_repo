@@ -21,4 +21,4 @@ val_dataset:
   batch_size: 2000
 
 training:
-  max_steps: 20000
+  max_steps: 40000

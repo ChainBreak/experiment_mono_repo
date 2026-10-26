@@ -44,7 +44,7 @@ class LitModule(LightningModule):
 
         x = self.model(x)
         predictor_loss, reconstruction_loss = self.multi_hypothesis_prediction.loss(x, y, self.log)
-        loss = 0.01*predictor_loss +reconstruction_loss
+        loss = 0.001*predictor_loss +reconstruction_loss
 
         self.log("train_loss", loss, prog_bar=True)
         self.log("train_predictor_loss", predictor_loss, prog_bar=True)
